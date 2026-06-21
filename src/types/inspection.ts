@@ -11,6 +11,7 @@ export interface Project {
   applicantName: string;
   inspectionType: string;
   inspectionDate: string;
+  reportStatus?: ReportStatus;
   applicantAddress?: string;
   applicantPhone?: string;
   contactPerson?: string;
@@ -92,6 +93,8 @@ export interface PhotoRecord {
 }
 
 export type UserRole = "admin" | "user";
+
+export type ReportStatus = "草稿" | "審閱中" | "待補件" | "完稿" | "已歸檔";
 
 export interface AppUser {
   id: string;

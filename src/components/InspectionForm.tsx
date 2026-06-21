@@ -85,7 +85,7 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
         </div>
       </div>
       <p className="mb-4 rounded-md bg-[#E6FBF7] p-3 text-sm text-muted">
-        上傳方式：按「拍照/上傳」後，iPad Safari 會跳出「拍照」或「照片圖庫」；目前 MVP 先暫存在瀏覽器畫面，接 Supabase Storage 後會永久保存。
+        上傳方式：按「拍照/上傳」後，iPad Safari 會跳出「拍照」或「照片圖庫」；目前先暫存在瀏覽器預覽，接 Supabase Storage 後才會永久保存。
       </p>
 
       <label className="mb-4 block">

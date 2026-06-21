@@ -38,6 +38,7 @@ create table if not exists public.ci_projects (
   contact_person text,
   inspection_type text,
   inspection_date date,
+  report_status text not null default '草稿',
   received_date date,
   received_no text,
   target_summary text,

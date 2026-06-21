@@ -30,6 +30,7 @@ import type {
   NoEntryZone,
   Project,
   ProjectEngineer,
+  ReportStatus,
   ReportSection,
   SitePhoto,
   Target,
@@ -43,6 +44,7 @@ const wallFinishOptions = ["水泥粉光", "油漆", "壁紙", "磁磚", "裝飾
 const ceilingFinishOptions = ["水泥粉光", "油漆", "壁紙", "木架", "輕鋼架", "其他"];
 const floorFinishOptions = ["塑膠地磚", "磨石子", "磁磚", "地毯", "木板", "其他"];
 const surveyStatusOptions = ["部份隔間不便拍照", "拒絕鑑定", "屢次造訪無人", "本戶裝修"];
+const reportStatusOptions: ReportStatus[] = ["草稿", "審閱中", "待補件", "完稿", "已歸檔"];
 
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
@@ -152,14 +154,24 @@ export default function HomePage() {
     return (
       <main className="min-h-screen bg-background px-4 py-6 text-foreground">
         <PwaRegister />
-        <section className="mx-auto grid min-h-[calc(100vh-48px)] max-w-5xl place-items-center">
+        <section className="mx-auto grid min-h-[calc(100vh-48px)] max-w-3xl place-items-center">
           <div className="w-full overflow-hidden rounded-lg border border-line bg-paper shadow-[0_18px_45px_rgba(10,35,66,0.12)]">
-            <div className="border-b border-[#12365f] bg-[#0A2342] p-6 text-white md:p-8">
-              <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">CIVIL INSPECTION REPORT</p>
-              <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/72">
-                工程顧問工作台：案件、報告主文、附件七與附件八集中管理。
-              </p>
+            <div className="grid gap-5 border-b border-[#12365f] bg-[#0A2342] p-6 text-white md:grid-cols-[1fr_180px] md:p-8">
+              <div>
+                <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">CIVIL INSPECTION REPORT</p>
+                <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
+              </div>
+              <div className="hidden h-32 rounded-lg border border-white/15 bg-white/10 p-4 md:block">
+                <div className="mb-3 flex items-center justify-between text-[#00CBA9]">
+                  <Building2 size={28} />
+                  <span className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-white/72">A4</span>
+                </div>
+                <svg viewBox="0 0 180 88" className="h-[72px] w-full" aria-hidden="true">
+                  <path d="M8 72 H172 M24 72 V22 H78 V72 M78 44 H126 V72 M126 30 H158 V72" fill="none" stroke="#D8E1EA" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M18 18 L162 18 M18 34 L58 34 M94 56 L150 56" fill="none" stroke="#00CBA9" strokeWidth="2" strokeLinecap="round" strokeDasharray="6 7" />
+                  <circle cx="40" cy="48" r="7" fill="#00CBA9" opacity="0.9" />
+                </svg>
+              </div>
             </div>
             <div className="p-6 md:p-8">
             {supabaseEnabled ? (
@@ -256,7 +268,7 @@ export default function HomePage() {
           {showUserManagement && currentUser.role === "admin" ? (
             <UserManagementPanel users={managedUsers} onChange={setManagedUsers} currentUserId={currentUser.id} />
           ) : null}
-          <CaseHeader activeCase={activeCase} />
+          <CaseHeader activeCase={activeCase} onChange={updateCase} />
           <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-sm">
             {workspaceTabs.map((tab) => (
               <button
@@ -471,7 +483,19 @@ function AttachmentPlaceholder({ no, title, description }: { no: number; title: 
   );
 }
 
-function CaseHeader({ activeCase }: { activeCase: InspectionCase }) {
+function CaseHeader({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  function updateReportStatus(reportStatus: ReportStatus) {
+    onChange({
+      ...activeCase,
+      project: {
+        ...activeCase.project,
+        reportStatus,
+        updatedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   return (
     <section className="mb-4 rounded-lg border border-line bg-paper p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -482,9 +506,20 @@ function CaseHeader({ activeCase }: { activeCase: InspectionCase }) {
             {activeCase.project.caseNo} / {activeCase.project.applicantName} / {activeCase.project.inspectionDate}
           </p>
         </div>
-        <div className="rounded-md border border-line bg-white px-3 py-2 text-sm">
-          報告狀態：草稿
-        </div>
+        <label className="grid gap-1 rounded-md border border-line bg-white px-3 py-2 text-sm">
+          <span className="font-semibold text-muted">報告狀態</span>
+          <select
+            value={activeCase.project.reportStatus ?? "草稿"}
+            onChange={(event) => updateReportStatus(event.target.value as ReportStatus)}
+            className="min-h-9 rounded-md border border-line bg-white px-2 font-bold text-foreground"
+          >
+            {reportStatusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </section>
   );
@@ -1053,7 +1088,9 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">附件七匯出預覽</h2>
-            <p className="text-sm text-muted">目前附件七資料仍是前端暫存；接資料庫後會依案件永久保存。</p>
+            <p className="text-sm text-muted">
+              目前照片只存在瀏覽器預覽與本次 PDF 匯出；接 Supabase Storage 後會存入 ci-inspection-photos，並依案件、標的物、樓層與照片編號管理。
+            </p>
           </div>
           <PdfExportButton project={project} target={target} floors={floors} points={points} sitePhotos={[]} />
         </div>
@@ -1268,6 +1305,7 @@ function createCase(userId: string): InspectionCase {
     contactPerson: "",
     inspectionType: "施工前鄰房現況鑑定",
     inspectionDate: new Date().toISOString().slice(0, 10),
+    reportStatus: "草稿",
     receivedDate: "",
     receivedNo: "",
     targetSummary: "",
