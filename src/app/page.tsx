@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Building2,
@@ -19,6 +19,7 @@ import { InspectionForm } from "@/components/InspectionForm";
 import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
+import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
   AppUser,
   AttachmentSlot,
@@ -49,11 +50,67 @@ const demoUsers: AppUser[] = [
 
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [cases, setCases] = useState<InspectionCase[]>(() => [createCase("user-admin")]);
   const [activeCaseId, setActiveCaseId] = useState(cases[0]?.id);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("basic");
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
+  const supabaseEnabled = hasSupabaseEnv();
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setCurrentUser({
+          id: data.user.id,
+          name: data.user.user_metadata?.name ?? data.user.email ?? "Google 使用者",
+          email: data.user.email ?? "",
+          role: "admin",
+        });
+      }
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        setCurrentUser(null);
+        return;
+      }
+
+      setCurrentUser({
+        id: session.user.id,
+        name: session.user.user_metadata?.name ?? session.user.email ?? "Google 使用者",
+        email: session.user.email ?? "",
+        role: "admin",
+      });
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  async function signInWithGoogle() {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  }
+
+  async function signOut() {
+    const supabase = createSupabaseBrowserClient();
+    await supabase?.auth.signOut();
+    setCurrentUser(null);
+  }
 
   function updateCase(nextCase: InspectionCase) {
     setCases((current) =>
@@ -75,6 +132,17 @@ export default function HomePage() {
     setActiveTab("basic");
   }
 
+  if (authLoading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 text-foreground">
+        <div className="rounded-lg border border-line bg-paper p-6 text-center shadow-sm">
+          <div className="text-lg font-bold">載入登入狀態中</div>
+          <p className="mt-2 text-sm text-muted">正在確認 Google OAuth session。</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!currentUser) {
     return (
       <main className="min-h-screen bg-background px-4 py-6 text-foreground">
@@ -84,8 +152,21 @@ export default function HomePage() {
             <p className="text-sm font-semibold tracking-[0.2em] text-accent">CIVIL INSPECTION REPORT</p>
             <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
             <p className="mt-3 max-w-2xl text-muted">
-              第一階段先建立完整產品骨架：Google 帳戶登入、案件管理、報告主文、附件管理、附件七與附件八編輯。現在使用示意登入，下一步可接 Supabase Auth Google OAuth。
+              第一階段先建立完整產品骨架：Google 帳戶登入、案件管理、報告主文、附件管理、附件七與附件八編輯。
             </p>
+            {supabaseEnabled ? (
+              <button
+                type="button"
+                onClick={signInWithGoogle}
+                className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white"
+              >
+                <LogIn size={20} /> 使用 Google 帳戶登入
+              </button>
+            ) : (
+              <div className="mt-6 rounded-md border border-line bg-[#fff8e8] p-4 text-sm text-accent">
+                尚未設定 Supabase 環境變數，先顯示示意登入。部署後設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 就會啟用 Google OAuth。
+              </div>
+            )}
             <div className="mt-6 grid gap-3 md:grid-cols-2">
               {demoUsers.map((user) => (
                 <button
@@ -135,7 +216,7 @@ export default function HomePage() {
           </span>
           <button
             type="button"
-            onClick={() => setCurrentUser(null)}
+            onClick={signOut}
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
           >
             <LogIn size={18} /> 切換帳號

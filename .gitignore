@@ -6,3 +6,5 @@ out
 dist
 coverage
 *.log
+.vercel
+supabase/.temp
