@@ -11,8 +11,8 @@ import {
   ImagePlus,
   LogIn,
   Plus,
-  ShieldCheck,
-  UserRound,
+  Trash2,
+  Users,
 } from "lucide-react";
 import { FloorPlanCanvas, serializePlanToSvg } from "@/components/FloorPlanCanvas";
 import { InspectionForm } from "@/components/InspectionForm";
@@ -34,7 +34,7 @@ import type {
   Target,
 } from "@/types/inspection";
 
-type WorkspaceTab = "basic" | "main" | "attachments" | "attachment7" | "attachment8" | "export";
+type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
 
 const floorNames: FloorName[] = ["1F", "2F", "3F", "RF"];
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
@@ -43,17 +43,14 @@ const ceilingFinishOptions = ["水泥粉光", "油漆", "壁紙", "木架", "輕
 const floorFinishOptions = ["塑膠地磚", "磨石子", "磁磚", "地毯", "木板", "其他"];
 const surveyStatusOptions = ["部份隔間不便拍照", "拒絕鑑定", "屢次造訪無人", "本戶裝修"];
 
-const demoUsers: AppUser[] = [
-  { id: "user-admin", name: "Benson", email: "benson@example.com", role: "admin" },
-  { id: "user-staff", name: "現場使用者", email: "staff@example.com", role: "user" },
-];
-
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [cases, setCases] = useState<InspectionCase[]>(() => [createCase("user-admin")]);
   const [activeCaseId, setActiveCaseId] = useState(cases[0]?.id);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("basic");
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [managedUsers, setManagedUsers] = useState<AppUser[]>([]);
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
   const supabaseEnabled = hasSupabaseEnv();
@@ -67,12 +64,16 @@ export default function HomePage() {
 
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        setCurrentUser({
+        const signedInUser = {
           id: data.user.id,
           name: data.user.user_metadata?.name ?? data.user.email ?? "Google 使用者",
           email: data.user.email ?? "",
-          role: "admin",
+          role: "admin" as const,
+        };
+        setCurrentUser({
+          ...signedInUser,
         });
+        setManagedUsers((current) => upsertManagedUser(current, signedInUser));
       }
       setAuthLoading(false);
     });
@@ -83,12 +84,15 @@ export default function HomePage() {
         return;
       }
 
-      setCurrentUser({
+      const signedInUser = {
         id: session.user.id,
         name: session.user.user_metadata?.name ?? session.user.email ?? "Google 使用者",
         email: session.user.email ?? "",
-        role: "admin",
-      });
+        role: "admin" as const,
+      };
+
+      setCurrentUser(signedInUser);
+      setManagedUsers((current) => upsertManagedUser(current, signedInUser));
     });
 
     return () => listener.subscription.unsubscribe();
@@ -151,9 +155,6 @@ export default function HomePage() {
           <div className="w-full rounded-lg border border-line bg-paper p-6 shadow-sm md:p-8">
             <p className="text-sm font-semibold tracking-[0.2em] text-accent">CIVIL INSPECTION REPORT</p>
             <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
-            <p className="mt-3 max-w-2xl text-muted">
-              第一階段先建立完整產品骨架：Google 帳戶登入、案件管理、報告主文、附件管理、附件七與附件八編輯。
-            </p>
             {supabaseEnabled ? (
               <button
                 type="button"
@@ -164,34 +165,9 @@ export default function HomePage() {
               </button>
             ) : (
               <div className="mt-6 rounded-md border border-line bg-[#fff8e8] p-4 text-sm text-accent">
-                尚未設定 Supabase 環境變數，先顯示示意登入。部署後設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 就會啟用 Google OAuth。
+                尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
               </div>
             )}
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
-              {demoUsers.map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => setCurrentUser(user)}
-                  className="flex min-h-24 items-center gap-4 rounded-lg border border-line bg-white p-4 text-left shadow-sm"
-                >
-                  <span className="grid size-12 place-items-center rounded-full bg-[#fff1d7] text-accent">
-                    {user.role === "admin" ? <ShieldCheck size={24} /> : <UserRound size={24} />}
-                  </span>
-                  <span>
-                    <span className="block text-lg font-bold">{user.name}</span>
-                    <span className="block text-sm text-muted">{user.email}</span>
-                    <span className="mt-1 inline-flex rounded-full border border-line px-2 py-1 text-xs font-semibold">
-                      {user.role === "admin" ? "管理者：可管理使用者與全部案件" : "使用者：編輯授權案件"}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-6 rounded-md border border-line bg-white p-4 text-sm text-muted">
-              <div className="mb-1 font-bold text-foreground">正式版登入建議</div>
-              使用 Supabase Auth 的 Google OAuth，登入後由 `profiles.role` 判斷管理者或使用者，再由 `project_members` 控制案件權限。
-            </div>
           </div>
         </section>
       </main>
@@ -214,6 +190,17 @@ export default function HomePage() {
           <span className="rounded-full border border-line bg-paper px-3 py-2 text-sm font-semibold">
             {currentUser.name} / {currentUser.role === "admin" ? "管理者" : "使用者"}
           </span>
+          {currentUser.role === "admin" ? (
+            <button
+              type="button"
+              onClick={() => setShowUserManagement((current) => !current)}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                showUserManagement ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <Users size={18} /> 使用者管理
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={signOut}
@@ -255,15 +242,12 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          {currentUser.role === "admin" ? (
-            <div className="mt-4 rounded-md border border-line bg-white p-3 text-sm">
-              <div className="font-bold">使用者管理</div>
-              <p className="mt-1 text-muted">正式版會在這裡新增使用者、設定管理者/使用者角色與案件權限。</p>
-            </div>
-          ) : null}
         </aside>
 
         <section className="min-w-0">
+          {showUserManagement && currentUser.role === "admin" ? (
+            <UserManagementPanel users={managedUsers} onChange={setManagedUsers} currentUserId={currentUser.id} />
+          ) : null}
           <CaseHeader activeCase={activeCase} />
           <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-sm">
             {workspaceTabs.map((tab) => (
@@ -283,6 +267,8 @@ export default function HomePage() {
           {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
           {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
           {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
+          {activeTab === "attachment5" ? <AttachmentPlaceholder no={5} title="水準測量" description="附件五將建立測量成果資料輸入、PDF 上傳與報告合併功能。" /> : null}
+          {activeTab === "attachment6" ? <AttachmentPlaceholder no={6} title="傾斜率測量" description="附件六將建立傾斜率測量成果資料輸入、照片或 PDF 上傳與報告合併功能。" /> : null}
           {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
           {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
           {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
@@ -296,10 +282,134 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string }> = [
   { id: "basic", label: "基本資料" },
   { id: "main", label: "封面/目錄/主文" },
   { id: "attachments", label: "附件管理" },
+  { id: "attachment5", label: "附件五" },
+  { id: "attachment6", label: "附件六" },
   { id: "attachment7", label: "附件七" },
   { id: "attachment8", label: "附件八" },
   { id: "export", label: "匯出報告" },
 ];
+
+function upsertManagedUser(users: AppUser[], nextUser: AppUser) {
+  if (users.some((user) => user.id === nextUser.id || user.email === nextUser.email)) {
+    return users.map((user) => (user.id === nextUser.id || user.email === nextUser.email ? { ...user, ...nextUser } : user));
+  }
+  return [nextUser, ...users];
+}
+
+function UserManagementPanel({
+  users,
+  onChange,
+  currentUserId,
+}: {
+  users: AppUser[];
+  onChange: (users: AppUser[]) => void;
+  currentUserId: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<AppUser["role"]>("user");
+
+  function addUser() {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
+    onChange(
+      upsertManagedUser(users, {
+        id: `pending-${normalizedEmail}`,
+        name: name.trim() || normalizedEmail,
+        email: normalizedEmail,
+        role,
+      }),
+    );
+    setEmail("");
+    setName("");
+    setRole("user");
+  }
+
+  return (
+    <section className="mb-4 rounded-lg border border-line bg-paper p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-lg font-bold">
+          <Users size={18} /> 使用者管理
+        </h2>
+        <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-muted">
+          {users.length} 位使用者
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-[1fr_1fr_160px_auto]">
+        <TextField label="Google Email" value={email} onChange={setEmail} />
+        <TextField label="姓名" value={name} onChange={setName} />
+        <SelectField label="角色" value={role} options={["admin", "user"]} onChange={(value) => setRole(value as AppUser["role"])} />
+        <button
+          type="button"
+          onClick={addUser}
+          className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white"
+        >
+          <Plus size={18} /> 新增
+        </button>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-[#efe6d8] text-left">
+              <th className="border border-line p-2">使用者</th>
+              <th className="border border-line p-2">Email</th>
+              <th className="border border-line p-2">角色</th>
+              <th className="border border-line p-2">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id} className="bg-white">
+                <td className="border border-line p-2 font-bold">{user.name}</td>
+                <td className="border border-line p-2">{user.email}</td>
+                <td className="border border-line p-2">
+                  <select
+                    value={user.role}
+                    onChange={(event) =>
+                      onChange(users.map((item) => (item.id === user.id ? { ...item, role: event.target.value as AppUser["role"] } : item)))
+                    }
+                    className="min-h-10 rounded-md border border-line bg-white px-2"
+                  >
+                    <option value="admin">管理者</option>
+                    <option value="user">使用者</option>
+                  </select>
+                </td>
+                <td className="border border-line p-2">
+                  <button
+                    type="button"
+                    disabled={user.id === currentUserId}
+                    onClick={() => onChange(users.filter((item) => item.id !== user.id))}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 size={16} /> 刪除
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 ? (
+              <tr className="bg-white">
+                <td className="border border-line p-3 text-muted" colSpan={4}>
+                  尚未建立使用者名單。登入帳號會自動加入此清單。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function AttachmentPlaceholder({ no, title, description }: { no: number; title: string; description: string }) {
+  return (
+    <Panel title={`附件${toChineseNumber(no)} ${title}`} icon={<FileText size={18} />}>
+      <div className="rounded-md border border-dashed border-accent bg-[#fff8e8] p-4">
+        <div className="text-base font-bold text-accent">待開發</div>
+        <p className="mt-2 text-sm text-muted">{description}</p>
+      </div>
+    </Panel>
+  );
+}
 
 function CaseHeader({ activeCase }: { activeCase: InspectionCase }) {
   return (
