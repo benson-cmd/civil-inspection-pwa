@@ -153,22 +153,29 @@ export default function HomePage() {
       <main className="min-h-screen bg-background px-4 py-6 text-foreground">
         <PwaRegister />
         <section className="mx-auto grid min-h-[calc(100vh-48px)] max-w-5xl place-items-center">
-          <div className="w-full rounded-lg border border-line bg-paper p-6 shadow-sm md:p-8">
-            <p className="text-sm font-semibold tracking-[0.2em] text-accent">CIVIL INSPECTION REPORT</p>
-            <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
+          <div className="w-full overflow-hidden rounded-lg border border-line bg-paper shadow-[0_18px_45px_rgba(10,35,66,0.12)]">
+            <div className="border-b border-[#12365f] bg-[#0A2342] p-6 text-white md:p-8">
+              <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">CIVIL INSPECTION REPORT</p>
+              <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/72">
+                工程顧問工作台：案件、報告主文、附件七與附件八集中管理。
+              </p>
+            </div>
+            <div className="p-6 md:p-8">
             {supabaseEnabled ? (
               <button
                 type="button"
                 onClick={signInWithGoogle}
-                className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white"
+                className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
               >
                 <LogIn size={20} /> 使用 Google 帳戶登入
               </button>
             ) : (
-              <div className="mt-6 rounded-md border border-line bg-[#fff8e8] p-4 text-sm text-accent">
+              <div className="mt-6 rounded-md border border-line bg-[#E6FBF7] p-4 text-sm text-accent">
                 尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
               </div>
             )}
+            </div>
           </div>
         </section>
       </main>
@@ -182,13 +189,13 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-background px-4 py-4 text-foreground md:px-6 lg:px-8">
       <PwaRegister />
-      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#12365f] bg-[#0A2342] p-4 text-white shadow-sm">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-accent">REPORT WORKSPACE</p>
-          <h1 className="text-2xl font-black md:text-3xl">現況鑑定報告系統</h1>
+          <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">REPORT WORKSPACE</p>
+          <h1 className="text-2xl font-black text-white md:text-3xl">現況鑑定報告系統</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-line bg-paper px-3 py-2 text-sm font-semibold">
+          <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white">
             {currentUser.name} / {currentUser.role === "admin" ? "管理者" : "使用者"}
           </span>
           {currentUser.role === "admin" ? (
@@ -196,7 +203,7 @@ export default function HomePage() {
               type="button"
               onClick={() => setShowUserManagement((current) => !current)}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-                showUserManagement ? "border-accent bg-accent text-white" : "border-line bg-white"
+                showUserManagement ? "border-[#00CBA9] bg-[#00CBA9] text-[#051223]" : "border-white/20 bg-white/10 text-white"
               }`}
             >
               <Users size={18} /> 使用者管理
@@ -205,7 +212,7 @@ export default function HomePage() {
           <button
             type="button"
             onClick={signOut}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 text-sm font-semibold text-white"
           >
             <LogIn size={18} /> 切換帳號
           </button>
@@ -234,7 +241,7 @@ export default function HomePage() {
                   setActiveTab("basic");
                 }}
                 className={`rounded-md border p-3 text-left ${
-                  item.id === activeCase.id ? "border-accent bg-[#fff1d7]" : "border-line bg-white"
+                  item.id === activeCase.id ? "border-accent bg-[#DDF7F1]" : "border-line bg-white"
                 }`}
               >
                 <span className="block font-bold">{item.project.caseNo}</span>
@@ -403,7 +410,7 @@ function UserManagementPanel({
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
-            <tr className="bg-[#efe6d8] text-left">
+            <tr className="bg-[#E8EDF5] text-left">
               <th className="border border-line p-2">使用者</th>
               <th className="border border-line p-2">Email</th>
               <th className="border border-line p-2">角色</th>
@@ -456,7 +463,7 @@ function UserManagementPanel({
 function AttachmentPlaceholder({ no, title, description }: { no: number; title: string; description: string }) {
   return (
     <Panel title={`附件${toChineseNumber(no)} ${title}`} icon={<FileText size={18} />}>
-      <div className="rounded-md border border-dashed border-accent bg-[#fff8e8] p-4">
+      <div className="rounded-md border border-dashed border-accent bg-[#E6FBF7] p-4">
         <div className="text-base font-bold text-accent">待開發</div>
         <p className="mt-2 text-sm text-muted">{description}</p>
       </div>
@@ -684,7 +691,7 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
               {slot.fileName ? <div className="mt-1 text-sm text-accent">已選擇：{slot.fileName}</div> : null}
             </div>
             {slot.mode === "upload" ? (
-              <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#fff8e8] px-3 text-sm font-semibold text-accent">
+              <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-sm font-semibold text-accent">
                 上傳 PDF
                 <input
                   type="file"
@@ -983,7 +990,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-[#efe6d8] text-left">
+                  <tr className="bg-[#E8EDF5] text-left">
                     <th className="border border-line p-2">照片編號</th>
                     <th className="border border-line p-2">樓層</th>
                     <th className="border border-line p-2">位置</th>
@@ -998,7 +1005,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                     <tr
                       key={point.id}
                       onClick={() => setActivePointId(point.id)}
-                      className={`cursor-pointer ${point.id === activePointId ? "bg-[#fff1d7]" : "bg-white"}`}
+                      className={`cursor-pointer ${point.id === activePointId ? "bg-[#DDF7F1]" : "bg-white"}`}
                     >
                       <td className="border border-line p-2 font-bold text-accent">#{point.photoNo}</td>
                       <td className="border border-line p-2">{activeFloorName}</td>
@@ -1006,7 +1013,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                       <td className="border border-line p-2">{point.conditionType.join("、")}</td>
                       <td className="border border-line p-2">{point.crackWidthMm ?? ""}</td>
                       <td className="border border-line p-2">
-                        <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#fff8e8] px-3 text-xs font-semibold text-accent">
+                        <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-xs font-semibold text-accent">
                           {point.photo?.imageUrl ? "更換照片" : "上傳照片"}
                           <input
                             type="file"
@@ -1065,7 +1072,7 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
           <h2 className="text-lg font-bold">附件八 基地現況照片</h2>
           <p className="text-sm text-muted">用於基地外觀、施工基地周邊、道路或鄰地現況照片。</p>
         </div>
-        <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-accent bg-[#fff8e8] px-3 text-sm font-semibold text-accent">
+        <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-sm font-semibold text-accent">
           <ImagePlus size={18} /> 新增基地照片
           <input
             type="file"

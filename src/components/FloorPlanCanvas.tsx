@@ -220,7 +220,7 @@ export function FloorPlanCanvas({
             type="button"
             onClick={() => setSnapLine((current) => !current)}
             className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              snapLine ? "border-accent bg-[#fff1d7] text-accent" : "border-line bg-white"
+              snapLine ? "border-accent bg-[#DDF7F1] text-accent" : "border-line bg-white"
             }`}
           >
             <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
@@ -293,7 +293,7 @@ export function FloorPlanCanvas({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${viewBox.width} ${viewBox.height}`}
-        className="aspect-[90/62] w-full rounded-md border border-line bg-[#fffaf0]"
+        className="aspect-[90/62] w-full rounded-md border border-line bg-[#F8FAFC]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -303,7 +303,7 @@ export function FloorPlanCanvas({
       >
         <defs>
           <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
-            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#eadfcd" strokeWidth="1" />
+            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#D8E1EA" strokeWidth="1" />
           </pattern>
         </defs>
         <rect width={viewBox.width} height={viewBox.height} fill="url(#grid)" />
@@ -312,7 +312,7 @@ export function FloorPlanCanvas({
             key={`${path}-${index}`}
             d={path}
             fill="none"
-            stroke={mode === "erase" ? "#7b6b5d" : "#202020"}
+            stroke={mode === "erase" ? "#64748B" : "#202020"}
             strokeWidth={mode === "erase" ? 12 : 5}
             strokeLinecap="round"
             strokeLinejoin="round"

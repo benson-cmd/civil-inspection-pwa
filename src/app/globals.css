@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f5ee;
-  --foreground: #211a16;
-  --muted: #746a60;
-  --paper: #fffdf7;
-  --line: #d8cfc3;
-  --accent: #9f1d1d;
-  --accent-dark: #6f1111;
-  --ink: #1f2933;
+  --background: #f4f7fa;
+  --foreground: #0a2342;
+  --muted: #64748b;
+  --paper: #ffffff;
+  --line: #d8e1ea;
+  --accent: #008771;
+  --accent-dark: #006555;
+  --ink: #051223;
+  --surface-soft: #eef5fb;
+  --surface-accent: #e6fbf7;
 }
 
 @theme inline {
@@ -19,8 +21,10 @@
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
+  --color-surface-soft: var(--surface-soft);
+  --color-surface-accent: var(--surface-accent);
   --font-sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+  --font-mono: "JetBrains Mono", "Roboto Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 * {
@@ -37,6 +41,9 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(0, 203, 169, 0.1), transparent 26rem),
+    linear-gradient(180deg, #f8fafc 0%, var(--background) 42rem);
   font-family: var(--font-sans);
 }
 
@@ -53,7 +60,7 @@ input,
 select,
 textarea {
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(159, 29, 29, 0.16);
+  -webkit-tap-highlight-color: rgba(0, 203, 169, 0.18);
 }
 
 canvas {
