@@ -17,10 +17,18 @@ export interface Project {
   receivedDate?: string;
   receivedNo?: string;
   targetSummary?: string;
+  engineers?: ProjectEngineer[];
   engineerNames?: string;
   associationEngineers?: string;
+  finalDate?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ProjectEngineer {
+  id: string;
+  name: string;
+  memberNo: string;
 }
 
 export interface Target {

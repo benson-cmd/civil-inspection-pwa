@@ -29,6 +29,7 @@ import type {
   InspectionPoint,
   NoEntryZone,
   Project,
+  ProjectEngineer,
   ReportSection,
   SitePhoto,
   Target,
@@ -296,6 +297,51 @@ function upsertManagedUser(users: AppUser[], nextUser: AppUser) {
   return [nextUser, ...users];
 }
 
+function getProjectEngineers(project: Project): ProjectEngineer[] {
+  if (project.engineers?.length) return project.engineers;
+  if (project.engineerNames) {
+    return project.engineerNames
+      .split("、")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .map((name, index) => ({ id: `legacy-engineer-${index}`, name, memberNo: "" }));
+  }
+  return [{ id: "engineer-default", name: "", memberNo: "" }];
+}
+
+function buildEngineerSignature(project: Project) {
+  const engineers = getProjectEngineers(project).filter((engineer) => engineer.name || engineer.memberNo);
+  const lines = engineers.length
+    ? engineers.map((engineer, index) => {
+        const prefix = index === 0 ? "鑑定人：" : "　　　　";
+        const memberNo = engineer.memberNo ? `（會員編號第${engineer.memberNo}號）` : "";
+        return `${prefix}${engineer.name || "OOO"} 技師${memberNo}`;
+      })
+    : ["鑑定人：OOO 技師（會員編號第OOO號）"];
+
+  return ["社團法人臺中市土木技師公會", ...lines].join("\n");
+}
+
+function formatRocDate(date: string | undefined) {
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `中 華 民 國 ${parsed.getFullYear() - 1911} 年 ${parsed.getMonth() + 1} 月 ${parsed.getDate()} 日`;
+}
+
+function floorIdForTarget(targetId: string, floorName: FloorName) {
+  return `${targetId}__floor-${floorName}`;
+}
+
+function emptyFloorRecord<T>(): Record<FloorName, T> {
+  return {
+    "1F": [] as T,
+    "2F": [] as T,
+    "3F": [] as T,
+    RF: [] as T,
+  };
+}
+
 function UserManagementPanel({
   users,
   onChange,
@@ -433,6 +479,7 @@ function CaseHeader({ activeCase }: { activeCase: InspectionCase }) {
 function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
   const project = activeCase.project;
   const target = activeCase.target;
+  const engineers = getProjectEngineers(project);
 
   function updateProject(patch: Partial<Project>) {
     onChange({ ...activeCase, project: { ...project, ...patch } });
@@ -440,6 +487,40 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
 
   function updateTarget(patch: Partial<Target>) {
     onChange({ ...activeCase, target: { ...target, ...patch } });
+  }
+
+  function updateEngineer(engineerId: string, patch: Partial<ProjectEngineer>) {
+    updateProject({
+      engineers: engineers.map((engineer) => (engineer.id === engineerId ? { ...engineer, ...patch } : engineer)),
+    });
+  }
+
+  function addEngineer() {
+    updateProject({
+      engineers: [
+        ...engineers,
+        {
+          id: crypto.randomUUID(),
+          name: "",
+          memberNo: "",
+        },
+      ],
+    });
+  }
+
+  function removeEngineer(engineerId: string) {
+    const next = engineers.filter((engineer) => engineer.id !== engineerId);
+    updateProject({
+      engineers: next.length
+        ? next
+        : [
+            {
+              id: crypto.randomUUID(),
+              name: "",
+              memberNo: "",
+            },
+          ],
+    });
   }
 
   return (
@@ -455,9 +536,9 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
           <TextField label="申請日期" type="date" value={project.inspectionDate} onChange={(inspectionDate) => updateProject({ inspectionDate })} icon={<CalendarDays size={16} />} />
           <TextField label="公會收文日期" type="date" value={project.receivedDate ?? ""} onChange={(receivedDate) => updateProject({ receivedDate })} />
           <TextField label="收文號" value={project.receivedNo ?? ""} onChange={(receivedNo) => updateProject({ receivedNo })} />
-          <TextField label="鑑定人姓名" value={project.engineerNames ?? ""} onChange={(engineerNames) => updateProject({ engineerNames })} />
           <TextField label="公會技師" value={project.associationEngineers ?? ""} onChange={(associationEngineers) => updateProject({ associationEngineers })} />
           <TextField label="鑑定類型" value={project.inspectionType} onChange={(inspectionType) => updateProject({ inspectionType })} />
+          <TextField label="完稿日期" type="date" value={project.finalDate ?? ""} onChange={(finalDate) => updateProject({ finalDate })} />
           <label className="block md:col-span-2">
             <span className="mb-1 block text-sm font-semibold text-muted">標的物之坐落摘要</span>
             <textarea
@@ -468,6 +549,41 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
             />
           </label>
         </div>
+        <section className="mt-4 rounded-md border border-line bg-white p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold">鑑定技師</h3>
+            <button
+              type="button"
+              onClick={addEngineer}
+              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            >
+              <Plus size={16} /> 新增技師
+            </button>
+          </div>
+          <div className="grid gap-3">
+            {engineers.map((engineer, index) => (
+              <div key={engineer.id} className="grid gap-3 rounded-md border border-line bg-paper p-3 md:grid-cols-[1fr_1fr_auto]">
+                <TextField
+                  label={`鑑定技師 ${index + 1}`}
+                  value={engineer.name}
+                  onChange={(name) => updateEngineer(engineer.id, { name })}
+                />
+                <TextField
+                  label="會員編號"
+                  value={engineer.memberNo}
+                  onChange={(memberNo) => updateEngineer(engineer.id, { memberNo })}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeEngineer(engineer.id)}
+                  className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
+                >
+                  <Trash2 size={16} /> 刪除
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
       </Panel>
 
       <Panel title="主要標的物預設資料" icon={<Home size={18} />}>
@@ -482,6 +598,9 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
 }
 
 function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  const engineerSignature = buildEngineerSignature(activeCase.project);
+  const finalDateText = formatRocDate(activeCase.project.finalDate);
+
   function updateSection(sectionId: string, content: string) {
     onChange({
       ...activeCase,
@@ -498,7 +617,7 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
           <InfoLine label="申請人" value={activeCase.project.applicantName} />
           <InfoLine label="案件名稱" value={activeCase.project.projectName} />
           <InfoLine label="案件編號" value={activeCase.project.caseNo} />
-          <InfoLine label="鑑定人姓名" value={activeCase.project.engineerNames ?? "尚未填寫"} />
+          <InfoLine label="鑑定技師" value={getProjectEngineers(activeCase.project).map((engineer) => engineer.name).filter(Boolean).join("、") || "尚未填寫"} />
         </div>
       </Panel>
 
@@ -524,6 +643,12 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
                 rows={section.id === "attachments" ? 8 : 5}
                 className="w-full rounded-md border border-line bg-white p-3 leading-7"
               />
+              {section.id === "attachments" ? (
+                <div className="mt-3 rounded-md border border-line bg-white p-4 leading-8">
+                  <div className="whitespace-pre-wrap font-bold">{engineerSignature}</div>
+                  <div className="mt-3 text-right font-bold">{finalDateText || "中 華 民 國　　年　　月　　日"}</div>
+                </div>
+              ) : null}
             </label>
           ))}
         </div>
@@ -580,45 +705,94 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
 }
 
 function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  const [targets, setTargets] = useState<Target[]>(() => [{ ...activeCase.target }]);
+  const [activeTargetId, setActiveTargetId] = useState(activeCase.target.id);
   const [activeFloorName, setActiveFloorName] = useState<FloorName>("1F");
-  const [plansByFloor, setPlansByFloor] = useState<Record<FloorName, string[]>>({
-    "1F": [],
-    "2F": [],
-    "3F": [],
-    RF: [],
-  });
-  const [noEntryZonesByFloor, setNoEntryZonesByFloor] = useState<Record<FloorName, NoEntryZone[]>>({
-    "1F": [],
-    "2F": [],
-    "3F": [],
-    RF: [],
-  });
+  const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, string[]>>>({});
+  const [noEntryZonesByTargetFloor, setNoEntryZonesByTargetFloor] = useState<Record<string, Record<FloorName, NoEntryZone[]>>>({});
   const [points, setPoints] = useState<InspectionPoint[]>([]);
   const [activePointId, setActivePointId] = useState<string | undefined>();
 
   const project = activeCase.project;
-  const target = activeCase.target;
-  const activeFloorId = `floor-${activeFloorName}`;
+  const target = targets.find((item) => item.id === activeTargetId) ?? targets[0] ?? activeCase.target;
+  const activeFloorId = floorIdForTarget(target.id, activeFloorName);
+  const activePlanPaths = plansByTargetFloor[target.id]?.[activeFloorName] ?? [];
+  const activeNoEntryZones = noEntryZonesByTargetFloor[target.id]?.[activeFloorName] ?? [];
   const floorPoints = points.filter((point) => point.floorId === activeFloorId);
   const activePoint = points.find((point) => point.id === activePointId);
 
   const floors: Floor[] = useMemo(
     () =>
       floorNames.map((floorName) => {
-        const floorId = `floor-${floorName}`;
+        const floorId = floorIdForTarget(target.id, floorName);
         const floorSpecificPoints = points.filter((point) => point.floorId === floorId);
         return {
           id: floorId,
           targetId: target.id,
           floorName,
-          planSvgOrJson: serializePlanToSvg(plansByFloor[floorName], floorSpecificPoints, noEntryZonesByFloor[floorName]),
+          planSvgOrJson: serializePlanToSvg(
+            plansByTargetFloor[target.id]?.[floorName] ?? [],
+            floorSpecificPoints,
+            noEntryZonesByTargetFloor[target.id]?.[floorName] ?? [],
+          ),
         };
       }),
-    [noEntryZonesByFloor, plansByFloor, points, target.id],
+    [noEntryZonesByTargetFloor, plansByTargetFloor, points, target.id],
   );
 
   function updateTarget(patch: Partial<Target>) {
-    onChange({ ...activeCase, target: { ...target, ...patch } });
+    const nextTarget = { ...target, ...patch };
+    setTargets((current) => current.map((item) => (item.id === target.id ? nextTarget : item)));
+    if (target.id === activeCase.target.id) {
+      onChange({ ...activeCase, target: nextTarget });
+    }
+  }
+
+  function addTarget() {
+    const newTarget: Target = {
+      ...activeCase.target,
+      id: crypto.randomUUID(),
+      address: `新增標的物 ${targets.length + 1}`,
+      note: "",
+    };
+    setTargets((current) => [...current, newTarget]);
+    setActiveTargetId(newTarget.id);
+    setActiveFloorName("1F");
+    setActivePointId(undefined);
+  }
+
+  function removeTarget(targetId: string) {
+    if (targets.length <= 1) return;
+    const nextTargets = targets.filter((item) => item.id !== targetId);
+    setTargets(nextTargets);
+    setPoints((current) => current.filter((point) => !point.floorId.startsWith(`${targetId}__`)));
+    if (activeTargetId === targetId) {
+      setActiveTargetId(nextTargets[0].id);
+      setActiveFloorName("1F");
+      setActivePointId(undefined);
+    }
+  }
+
+  function updateActivePlan(paths: string[]) {
+    setPlansByTargetFloor((current) => ({
+      ...current,
+      [target.id]: {
+        ...emptyFloorRecord<string[]>(),
+        ...current[target.id],
+        [activeFloorName]: paths,
+      },
+    }));
+  }
+
+  function updateActiveNoEntryZones(zones: NoEntryZone[]) {
+    setNoEntryZonesByTargetFloor((current) => ({
+      ...current,
+      [target.id]: {
+        ...emptyFloorRecord<NoEntryZone[]>(),
+        ...current[target.id],
+        [activeFloorName]: zones,
+      },
+    }));
   }
 
   function addPoint(position: { x: number; y: number }) {
@@ -661,6 +835,48 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
 
   return (
     <div className="grid gap-4">
+      <section className="rounded-lg border border-line bg-paper p-3 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">標的物之坐落</h2>
+          <button
+            type="button"
+            onClick={addTarget}
+            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-accent px-3 text-sm font-bold text-white"
+          >
+            <Plus size={16} /> 新增標的物
+          </button>
+        </div>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {targets.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setActiveTargetId(item.id);
+                setActiveFloorName("1F");
+                setActivePointId(undefined);
+              }}
+              className={`min-h-11 rounded-md border px-3 text-sm font-bold ${
+                item.id === target.id ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              標的物 {index + 1}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <TextField label="標的物之坐落" value={target.address} onChange={(address) => updateTarget({ address })} />
+          <button
+            type="button"
+            disabled={targets.length <= 1}
+            onClick={() => removeTarget(target.id)}
+            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 size={16} /> 刪除此標的物
+          </button>
+        </div>
+      </section>
+
       <section className="grid gap-3 lg:grid-cols-3">
         <Panel title="牆面" icon={<Building2 size={18} />}>
           <OptionGroup value={target.wallFinish} options={wallFinishOptions} onChange={(wallFinish) => updateTarget({ wallFinish })} />
@@ -734,10 +950,10 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           <FloorPlanCanvas
             points={floorPoints}
             activePointId={activePointId}
-            planPaths={plansByFloor[activeFloorName]}
-            noEntryZones={noEntryZonesByFloor[activeFloorName]}
-            onPlanChange={(paths) => setPlansByFloor((current) => ({ ...current, [activeFloorName]: paths }))}
-            onNoEntryZonesChange={(zones) => setNoEntryZonesByFloor((current) => ({ ...current, [activeFloorName]: zones }))}
+            planPaths={activePlanPaths}
+            noEntryZones={activeNoEntryZones}
+            onPlanChange={updateActivePlan}
+            onNoEntryZonesChange={updateActiveNoEntryZones}
             onAddPoint={addPoint}
             onMovePoint={(pointId, position) =>
               setPoints((current) =>
@@ -745,17 +961,14 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
               )
             }
             onSelectPoint={setActivePointId}
-            onClearPlan={() => setPlansByFloor((current) => ({ ...current, [activeFloorName]: [] }))}
+            onClearPlan={() => updateActivePlan([])}
             onUndoPlan={() => {
-              const zones = noEntryZonesByFloor[activeFloorName];
+              const zones = activeNoEntryZones;
               if (zones.length > 0) {
-                setNoEntryZonesByFloor((current) => ({
-                  ...current,
-                  [activeFloorName]: current[activeFloorName].slice(0, -1),
-                }));
+                updateActiveNoEntryZones(zones.slice(0, -1));
                 return;
               }
-              setPlansByFloor((current) => ({ ...current, [activeFloorName]: current[activeFloorName].slice(0, -1) }));
+              updateActivePlan(activePlanPaths.slice(0, -1));
             }}
           />
 
@@ -1036,7 +1249,7 @@ function createCase(userId: string): InspectionCase {
     id: crypto.randomUUID(),
     caseNo: "115鑑000號",
     projectName: "鄰房現況鑑定報告書",
-    applicantName: "申請單位",
+    applicantName: "OO營造有限公司",
     applicantAddress: "",
     applicantPhone: "",
     contactPerson: "",
@@ -1045,8 +1258,10 @@ function createCase(userId: string): InspectionCase {
     receivedDate: "",
     receivedNo: "",
     targetSummary: "",
+    engineers: [{ id: crypto.randomUUID(), name: "", memberNo: "" }],
     engineerNames: "",
     associationEngineers: "",
+    finalDate: new Date().toISOString().slice(0, 10),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
