@@ -322,6 +322,13 @@ function buildEngineerSignature(project: Project) {
   return ["社團法人臺中市土木技師公會", ...lines].join("\n");
 }
 
+function formatEngineerNames(project: Project) {
+  return getProjectEngineers(project)
+    .map((engineer) => engineer.name.trim())
+    .filter(Boolean)
+    .join("、");
+}
+
 function formatRocDate(date: string | undefined) {
   if (!date) return "";
   const parsed = new Date(`${date}T00:00:00`);
@@ -536,7 +543,6 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
           <TextField label="申請日期" type="date" value={project.inspectionDate} onChange={(inspectionDate) => updateProject({ inspectionDate })} icon={<CalendarDays size={16} />} />
           <TextField label="公會收文日期" type="date" value={project.receivedDate ?? ""} onChange={(receivedDate) => updateProject({ receivedDate })} />
           <TextField label="收文號" value={project.receivedNo ?? ""} onChange={(receivedNo) => updateProject({ receivedNo })} />
-          <TextField label="公會技師" value={project.associationEngineers ?? ""} onChange={(associationEngineers) => updateProject({ associationEngineers })} />
           <TextField label="鑑定類型" value={project.inspectionType} onChange={(inspectionType) => updateProject({ inspectionType })} />
           <TextField label="完稿日期" type="date" value={project.finalDate ?? ""} onChange={(finalDate) => updateProject({ finalDate })} />
           <label className="block md:col-span-2">
@@ -1260,8 +1266,7 @@ function createCase(userId: string): InspectionCase {
     targetSummary: "",
     engineers: [{ id: crypto.randomUUID(), name: "", memberNo: "" }],
     engineerNames: "",
-    associationEngineers: "",
-    finalDate: new Date().toISOString().slice(0, 10),
+    finalDate: "",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -1331,7 +1336,7 @@ function createDefaultSections(project: Project): ReportSection[] {
       title: "七、會勘人員",
       source: "basic",
       fixedTitle: true,
-      content: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${project.associationEngineers ?? ""} 技師\n所有權人代表：詳附件三。`,
+      content: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${formatEngineerNames(project)} 技師\n所有權人代表：詳附件三。`,
     },
     { id: "process", order: 8, title: "八、鑑定過程", source: "editable", fixedTitle: true, content: "請輸入鑑定過程。" },
     { id: "site-status", order: 9, title: "九、工地現況", source: "editable", fixedTitle: true, content: "請輸入工地現況。" },
