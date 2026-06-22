@@ -39,6 +39,12 @@ export function createCase(userId: string): InspectionCase {
     id: projectId,
     project,
     target,
+    attachmentSeven: {
+      targets: [target],
+      plansByTargetFloor: {},
+      noEntryZonesByTargetFloor: {},
+      points: [],
+    },
     reportSections: createDefaultSections(project),
     attachments: createDefaultAttachments(),
     createdByUserId: userId,
@@ -130,4 +136,3 @@ function formatEngineerNames(project: Project) {
     .filter(Boolean)
     .join("、");
 }
-

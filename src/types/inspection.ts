@@ -125,8 +125,16 @@ export interface InspectionCase {
   id: string;
   project: Project;
   target: Target;
+  attachmentSeven?: AttachmentSevenData;
   reportSections: ReportSection[];
   attachments: AttachmentSlot[];
   createdByUserId: string;
   updatedAt: string;
+}
+
+export interface AttachmentSevenData {
+  targets: Target[];
+  plansByTargetFloor: Record<string, Record<FloorName, string[]>>;
+  noEntryZonesByTargetFloor: Record<string, Record<FloorName, NoEntryZone[]>>;
+  points: InspectionPoint[];
 }

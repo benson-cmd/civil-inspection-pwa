@@ -797,12 +797,18 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
 }
 
 function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
-  const [targets, setTargets] = useState<Target[]>(() => [{ ...activeCase.target }]);
+  const [targets, setTargets] = useState<Target[]>(() =>
+    activeCase.attachmentSeven?.targets.length ? activeCase.attachmentSeven.targets : [{ ...activeCase.target }],
+  );
   const [activeTargetId, setActiveTargetId] = useState(activeCase.target.id);
   const [activeFloorName, setActiveFloorName] = useState<FloorName>("1F");
-  const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, string[]>>>({});
-  const [noEntryZonesByTargetFloor, setNoEntryZonesByTargetFloor] = useState<Record<string, Record<FloorName, NoEntryZone[]>>>({});
-  const [points, setPoints] = useState<InspectionPoint[]>([]);
+  const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, string[]>>>(
+    () => activeCase.attachmentSeven?.plansByTargetFloor ?? {},
+  );
+  const [noEntryZonesByTargetFloor, setNoEntryZonesByTargetFloor] = useState<Record<string, Record<FloorName, NoEntryZone[]>>>(
+    () => activeCase.attachmentSeven?.noEntryZonesByTargetFloor ?? {},
+  );
+  const [points, setPoints] = useState<InspectionPoint[]>(() => activeCase.attachmentSeven?.points ?? []);
   const [activePointId, setActivePointId] = useState<string | undefined>();
 
   const project = activeCase.project;
@@ -812,6 +818,17 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   const activeNoEntryZones = noEntryZonesByTargetFloor[target.id]?.[activeFloorName] ?? [];
   const floorPoints = points.filter((point) => point.floorId === activeFloorId);
   const activePoint = points.find((point) => point.id === activePointId);
+
+  useEffect(() => {
+    const nextTargets = activeCase.attachmentSeven?.targets.length ? activeCase.attachmentSeven.targets : [{ ...activeCase.target }];
+    setTargets(nextTargets);
+    setPlansByTargetFloor(activeCase.attachmentSeven?.plansByTargetFloor ?? {});
+    setNoEntryZonesByTargetFloor(activeCase.attachmentSeven?.noEntryZonesByTargetFloor ?? {});
+    setPoints(activeCase.attachmentSeven?.points ?? []);
+    setActiveTargetId(nextTargets[0]?.id ?? activeCase.target.id);
+    setActiveFloorName("1F");
+    setActivePointId(undefined);
+  }, [activeCase.id]);
 
   const floors: Floor[] = useMemo(
     () =>
@@ -834,10 +851,9 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
 
   function updateTarget(patch: Partial<Target>) {
     const nextTarget = { ...target, ...patch };
-    setTargets((current) => current.map((item) => (item.id === target.id ? nextTarget : item)));
-    if (target.id === activeCase.target.id) {
-      onChange({ ...activeCase, target: nextTarget });
-    }
+    const nextTargets = targets.map((item) => (item.id === target.id ? nextTarget : item));
+    setTargets(nextTargets);
+    persistAttachmentSeven({ targets: nextTargets });
   }
 
   function addTarget() {
@@ -847,44 +863,64 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
       address: `新增標的物 ${targets.length + 1}`,
       note: "",
     };
-    setTargets((current) => [...current, newTarget]);
+    const nextTargets = [...targets, newTarget];
+    setTargets(nextTargets);
     setActiveTargetId(newTarget.id);
     setActiveFloorName("1F");
     setActivePointId(undefined);
+    persistAttachmentSeven({ targets: nextTargets });
   }
 
   function removeTarget(targetId: string) {
     if (targets.length <= 1) return;
     const nextTargets = targets.filter((item) => item.id !== targetId);
+    const nextPlans = { ...plansByTargetFloor };
+    const nextNoEntryZones = { ...noEntryZonesByTargetFloor };
+    const nextPoints = points.filter((point) => !point.floorId.startsWith(`${targetId}__`));
+    delete nextPlans[targetId];
+    delete nextNoEntryZones[targetId];
+
     setTargets(nextTargets);
-    setPoints((current) => current.filter((point) => !point.floorId.startsWith(`${targetId}__`)));
+    setPlansByTargetFloor(nextPlans);
+    setNoEntryZonesByTargetFloor(nextNoEntryZones);
+    setPoints(nextPoints);
     if (activeTargetId === targetId) {
       setActiveTargetId(nextTargets[0].id);
       setActiveFloorName("1F");
       setActivePointId(undefined);
     }
+    persistAttachmentSeven({
+      targets: nextTargets,
+      plansByTargetFloor: nextPlans,
+      noEntryZonesByTargetFloor: nextNoEntryZones,
+      points: nextPoints,
+    });
   }
 
   function updateActivePlan(paths: string[]) {
-    setPlansByTargetFloor((current) => ({
-      ...current,
+    const nextPlans = {
+      ...plansByTargetFloor,
       [target.id]: {
         ...emptyFloorRecord<string[]>(),
-        ...current[target.id],
+        ...plansByTargetFloor[target.id],
         [activeFloorName]: paths,
       },
-    }));
+    };
+    setPlansByTargetFloor(nextPlans);
+    persistAttachmentSeven({ plansByTargetFloor: nextPlans });
   }
 
   function updateActiveNoEntryZones(zones: NoEntryZone[]) {
-    setNoEntryZonesByTargetFloor((current) => ({
-      ...current,
+    const nextNoEntryZones = {
+      ...noEntryZonesByTargetFloor,
       [target.id]: {
         ...emptyFloorRecord<NoEntryZone[]>(),
-        ...current[target.id],
+        ...noEntryZonesByTargetFloor[target.id],
         [activeFloorName]: zones,
       },
-    }));
+    };
+    setNoEntryZonesByTargetFloor(nextNoEntryZones);
+    persistAttachmentSeven({ noEntryZonesByTargetFloor: nextNoEntryZones });
   }
 
   function addPoint(position: { x: number; y: number }) {
@@ -901,12 +937,16 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
       note: "",
       createdAt: new Date().toISOString(),
     };
-    setPoints((current) => [...current, newPoint]);
+    const nextPoints = [...points, newPoint];
+    setPoints(nextPoints);
     setActivePointId(newPoint.id);
+    persistAttachmentSeven({ points: nextPoints });
   }
 
   function updatePoint(nextPoint: InspectionPoint) {
-    setPoints((current) => current.map((point) => (point.id === nextPoint.id ? nextPoint : point)));
+    const nextPoints = points.map((point) => (point.id === nextPoint.id ? nextPoint : point));
+    setPoints(nextPoints);
+    persistAttachmentSeven({ points: nextPoints });
   }
 
   function attachPhotoToPoint(point: InspectionPoint, file: File) {
@@ -923,6 +963,23 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
       },
     });
     setActivePointId(point.id);
+  }
+
+  function persistAttachmentSeven(
+    patch: Partial<NonNullable<InspectionCase["attachmentSeven"]>>,
+  ) {
+    const nextData = {
+      targets,
+      plansByTargetFloor,
+      noEntryZonesByTargetFloor,
+      points,
+      ...patch,
+    };
+    onChange({
+      ...activeCase,
+      target: nextData.targets[0] ?? activeCase.target,
+      attachmentSeven: nextData,
+    });
   }
 
   return (
@@ -1047,11 +1104,11 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             onPlanChange={updateActivePlan}
             onNoEntryZonesChange={updateActiveNoEntryZones}
             onAddPoint={addPoint}
-            onMovePoint={(pointId, position) =>
-              setPoints((current) =>
-                current.map((point) => (point.id === pointId ? { ...point, x: position.x, y: position.y } : point)),
-              )
-            }
+            onMovePoint={(pointId, position) => {
+              const movingPoint = points.find((point) => point.id === pointId);
+              if (!movingPoint) return;
+              updatePoint({ ...movingPoint, x: position.x, y: position.y });
+            }}
             onSelectPoint={setActivePointId}
             onClearPlan={() => updateActivePlan([])}
             onUndoPlan={() => {
@@ -1122,7 +1179,9 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           point={activePoint}
           onChange={updatePoint}
           onDelete={(pointId) => {
-            setPoints((current) => current.filter((point) => point.id !== pointId));
+            const nextPoints = points.filter((point) => point.id !== pointId);
+            setPoints(nextPoints);
+            persistAttachmentSeven({ points: nextPoints });
             setActivePointId(undefined);
           }}
         />

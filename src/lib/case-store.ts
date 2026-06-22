@@ -3,7 +3,12 @@ import { createDefaultAttachments, createDefaultSections } from "@/lib/defaults"
 import type {
   AppUser,
   AttachmentSlot,
+  AttachmentSevenData,
+  FloorName,
   InspectionCase,
+  InspectionPoint,
+  NoEntryZone,
+  PhotoRecord,
   Project,
   ProjectEngineer,
   ReportSection,
@@ -45,6 +50,39 @@ type TargetRow = {
   floor_finish: string | null;
   survey_status: string | null;
   note: string | null;
+  ci_floors?: FloorRow[];
+};
+
+type FloorRow = {
+  id: string;
+  target_id: string;
+  floor_name: FloorName;
+  plan_svg_or_json: string[] | null;
+  no_entry_zones: NoEntryZone[] | null;
+  ci_inspection_points?: InspectionPointRow[];
+};
+
+type InspectionPointRow = {
+  id: string;
+  floor_id: string;
+  photo_no: string;
+  x: number | string;
+  y: number | string;
+  direction_angle: number | string;
+  component_type: InspectionPoint["componentType"] | null;
+  condition_type: InspectionPoint["conditionType"] | null;
+  crack_width_mm: number | string | null;
+  note: string | null;
+  created_at: string;
+  ci_photos?: PhotoRow[];
+};
+
+type PhotoRow = {
+  id: string;
+  point_id: string;
+  image_url: string;
+  caption: string | null;
+  taken_at: string;
 };
 
 type ReportSectionRow = {
@@ -104,7 +142,7 @@ export async function ensureProfile(supabase: SupabaseClient, user: AppUser) {
 export async function fetchInspectionCases(supabase: SupabaseClient, userId: string): Promise<InspectionCase[]> {
   const { data, error } = await supabase
     .from("ci_projects")
-    .select("*, ci_targets(*), ci_report_sections(*), ci_attachments(*)")
+    .select("*, ci_targets(*, ci_floors(*, ci_inspection_points(*, ci_photos(*)))), ci_report_sections(*), ci_attachments(*)")
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
@@ -176,6 +214,8 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
 
   if (targetError) throw targetError;
 
+  await saveAttachmentSevenData(supabase, inspectionCase);
+
   const sectionRows = inspectionCase.reportSections.map((section) => ({
     project_id: project.id,
     section_order: section.order,
@@ -207,6 +247,95 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     .upsert(attachmentRows, { onConflict: "project_id,attachment_no" });
 
   if (attachmentsError) throw attachmentsError;
+}
+
+async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase: InspectionCase) {
+  const data = inspectionCase.attachmentSeven;
+  if (!data) return;
+
+  const targets = data.targets.length ? data.targets : [inspectionCase.target];
+  const targetRows = targets.map((target) => ({
+    id: target.id,
+    project_id: inspectionCase.project.id,
+    address: target.address,
+    usage_type: target.usageType,
+    wall_finish: target.wallFinish,
+    ceiling_finish: target.ceilingFinish,
+    floor_finish: target.floorFinish,
+    survey_status: target.surveyStatus,
+    note: target.note,
+  }));
+
+  const { error: targetsError } = await supabase.from("ci_targets").upsert(targetRows, { onConflict: "id" });
+  if (targetsError) throw targetsError;
+
+  const targetIds = targets.map((target) => target.id);
+  const { data: existingTargets } = await supabase.from("ci_targets").select("id").eq("project_id", inspectionCase.project.id);
+  const staleTargetIds = ((existingTargets ?? []) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter((id) => !targetIds.includes(id));
+  if (staleTargetIds.length) {
+    const { error } = await supabase.from("ci_targets").delete().in("id", staleTargetIds);
+    if (error) throw error;
+  }
+
+  const floorRows = targets.flatMap((target) =>
+    floorNames.map((floorName) => ({
+      id: floorIdForTarget(target.id, floorName),
+      target_id: target.id,
+      floor_name: floorName,
+      plan_svg_or_json: data.plansByTargetFloor[target.id]?.[floorName] ?? [],
+      no_entry_zones: data.noEntryZonesByTargetFloor[target.id]?.[floorName] ?? [],
+    })),
+  );
+
+  const { error: floorsError } = await supabase.from("ci_floors").upsert(floorRows, { onConflict: "id" });
+  if (floorsError) throw floorsError;
+
+  const pointRows = data.points.map((point) => ({
+    id: point.id,
+    floor_id: point.floorId,
+    photo_no: point.photoNo,
+    x: point.x,
+    y: point.y,
+    direction_angle: point.directionAngle,
+    component_type: point.componentType,
+    condition_type: point.conditionType,
+    crack_width_mm: point.crackWidthMm ?? null,
+    note: point.note,
+    created_at: point.createdAt,
+  }));
+
+  if (pointRows.length) {
+    const { error: pointsError } = await supabase.from("ci_inspection_points").upsert(pointRows, { onConflict: "id" });
+    if (pointsError) throw pointsError;
+  }
+
+  const floorIds = floorRows.map((floor) => floor.id);
+  const { data: existingPoints } = await supabase.from("ci_inspection_points").select("id").in("floor_id", floorIds);
+  const currentPointIds = data.points.map((point) => point.id);
+  const stalePointIds = ((existingPoints ?? []) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter((id) => !currentPointIds.includes(id));
+  if (stalePointIds.length) {
+    const { error } = await supabase.from("ci_inspection_points").delete().in("id", stalePointIds);
+    if (error) throw error;
+  }
+
+  const photoRows = data.points
+    .filter((point) => point.photo?.imageUrl)
+    .map((point) => ({
+      id: point.photo?.id,
+      point_id: point.id,
+      image_url: point.photo?.imageUrl ?? "",
+      caption: point.photo?.caption ?? "",
+      taken_at: point.photo?.takenAt ?? new Date().toISOString(),
+    }));
+
+  if (photoRows.length) {
+    const { error: photosError } = await supabase.from("ci_photos").upsert(photoRows, { onConflict: "id" });
+    if (photosError) throw photosError;
+  }
 }
 
 function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
@@ -256,6 +385,7 @@ function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
         note: "",
       };
 
+  const attachmentSeven = buildAttachmentSevenData(row, target);
   const reportSections = mergeReportSections(project, row.ci_report_sections ?? []);
   const attachments = mergeAttachments(row.ci_attachments ?? []);
 
@@ -263,10 +393,83 @@ function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
     id: row.id,
     project,
     target,
+    attachmentSeven,
     reportSections,
     attachments,
     createdByUserId: row.owner_id || userId,
     updatedAt: row.updated_at,
+  };
+}
+
+function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): AttachmentSevenData {
+  const targets = row.ci_targets?.length
+    ? row.ci_targets.map(targetRowToTarget)
+    : [fallbackTarget];
+  const plansByTargetFloor: AttachmentSevenData["plansByTargetFloor"] = {};
+  const noEntryZonesByTargetFloor: AttachmentSevenData["noEntryZonesByTargetFloor"] = {};
+  const points: InspectionPoint[] = [];
+
+  const floors = (row.ci_targets ?? []).flatMap((target) => target.ci_floors ?? []);
+
+  for (const floor of floors) {
+    if (!plansByTargetFloor[floor.target_id]) plansByTargetFloor[floor.target_id] = emptyFloorRecord<string[]>();
+    if (!noEntryZonesByTargetFloor[floor.target_id]) noEntryZonesByTargetFloor[floor.target_id] = emptyFloorRecord<NoEntryZone[]>();
+
+    plansByTargetFloor[floor.target_id][floor.floor_name] = Array.isArray(floor.plan_svg_or_json) ? floor.plan_svg_or_json : [];
+    noEntryZonesByTargetFloor[floor.target_id][floor.floor_name] = Array.isArray(floor.no_entry_zones) ? floor.no_entry_zones : [];
+
+    for (const point of floor.ci_inspection_points ?? []) {
+      points.push(inspectionPointRowToPoint(point));
+    }
+  }
+
+  return {
+    targets,
+    plansByTargetFloor,
+    noEntryZonesByTargetFloor,
+    points,
+  };
+}
+
+function targetRowToTarget(row: TargetRow): Target {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    address: row.address,
+    usageType: row.usage_type ?? "住宅",
+    wallFinish: row.wall_finish ?? "油漆",
+    ceilingFinish: row.ceiling_finish ?? "其他",
+    floorFinish: row.floor_finish ?? "其他",
+    surveyStatus: row.survey_status ?? "",
+    note: row.note ?? "",
+  };
+}
+
+function inspectionPointRowToPoint(row: InspectionPointRow): InspectionPoint {
+  const photoRow = row.ci_photos?.[0];
+  return {
+    id: row.id,
+    floorId: row.floor_id,
+    photoNo: row.photo_no,
+    x: Number(row.x),
+    y: Number(row.y),
+    directionAngle: Number(row.direction_angle),
+    componentType: row.component_type ?? [],
+    conditionType: row.condition_type ?? [],
+    crackWidthMm: row.crack_width_mm == null ? undefined : Number(row.crack_width_mm),
+    note: row.note ?? "",
+    photo: photoRow ? photoRowToRecord(photoRow) : undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function photoRowToRecord(row: PhotoRow): PhotoRecord {
+  return {
+    id: row.id,
+    pointId: row.point_id,
+    imageUrl: row.image_url,
+    caption: row.caption ?? "",
+    takenAt: row.taken_at,
   };
 }
 
@@ -322,4 +525,19 @@ function parseEngineers(value: string | null): ProjectEngineer[] {
 function normalizeReportStatus(value: string | null): ReportStatus {
   if (value === "審閱中" || value === "待補件" || value === "完稿" || value === "已歸檔") return value;
   return "草稿";
+}
+
+const floorNames: FloorName[] = ["1F", "2F", "3F", "RF"];
+
+function floorIdForTarget(targetId: string, floorName: FloorName) {
+  return `${targetId}__floor-${floorName}`;
+}
+
+function emptyFloorRecord<T>(): Record<FloorName, T> {
+  return {
+    "1F": [] as T,
+    "2F": [] as T,
+    "3F": [] as T,
+    RF: [] as T,
+  };
 }
