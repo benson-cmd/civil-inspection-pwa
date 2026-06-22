@@ -42,7 +42,9 @@ export function createCase(userId: string): InspectionCase {
     target,
     sitePhotos: [],
     levelMeasurements: [],
+    levelPlanPaths: [],
     tiltMeasurements: [],
+    tiltPlanPaths: [],
     attachmentSeven: {
       targets: [target],
       floorNamesByTarget: {

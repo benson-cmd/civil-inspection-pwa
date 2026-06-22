@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import type { Floor, InspectionPoint, Project, SitePhoto, Target } from "@/types/inspection";
+import type { Floor, InspectionPoint, LevelMeasurement, Project, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildReportHtml } from "@/lib/pdf";
 
 interface PdfExportButtonProps {
@@ -10,15 +10,39 @@ interface PdfExportButtonProps {
   floors: Floor[];
   points: InspectionPoint[];
   sitePhotos?: SitePhoto[];
+  levelMeasurements?: LevelMeasurement[];
+  levelPlanPaths?: string[];
+  tiltMeasurements?: TiltMeasurement[];
+  tiltPlanPaths?: string[];
 }
 
-export function PdfExportButton({ project, target, floors, points, sitePhotos = [] }: PdfExportButtonProps) {
+export function PdfExportButton({
+  project,
+  target,
+  floors,
+  points,
+  sitePhotos = [],
+  levelMeasurements = [],
+  levelPlanPaths = [],
+  tiltMeasurements = [],
+  tiltPlanPaths = [],
+}: PdfExportButtonProps) {
   return (
     <button
       type="button"
       className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white shadow-sm"
       onClick={() => {
-        const html = buildReportHtml({ project, target, floors, points, sitePhotos });
+        const html = buildReportHtml({
+          project,
+          target,
+          floors,
+          points,
+          sitePhotos,
+          levelMeasurements,
+          levelPlanPaths,
+          tiltMeasurements,
+          tiltPlanPaths,
+        });
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const printWindow = window.open(url, "_blank");

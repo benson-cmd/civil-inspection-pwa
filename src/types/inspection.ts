@@ -58,8 +58,13 @@ export interface LevelMeasurement {
   id: string;
   pointNo: string;
   location: string;
+  measurementDate?: string;
+  relativeElevation?: string;
   initialElevation: string;
   repeatElevation: string;
+  x?: number;
+  y?: number;
+  photo?: MeasurementPhoto;
   note: string;
 }
 
@@ -68,9 +73,23 @@ export interface TiltMeasurement {
   lineNo: string;
   location: string;
   direction: "X向" | "Y向";
+  measurementDate?: string;
+  x?: number;
+  y?: number;
   upperDistance: string;
   lowerDistance: string;
   floorHeight: string;
+  upperPhoto?: MeasurementPhoto;
+  lowerPhoto?: MeasurementPhoto;
+  note?: string;
+}
+
+export interface MeasurementPhoto {
+  id: string;
+  imageUrl: string;
+  storagePath?: string;
+  caption: string;
+  takenAt: string;
 }
 
 export interface Floor {
@@ -149,7 +168,9 @@ export interface InspectionCase {
   target: Target;
   sitePhotos?: SitePhoto[];
   levelMeasurements?: LevelMeasurement[];
+  levelPlanPaths?: string[];
   tiltMeasurements?: TiltMeasurement[];
+  tiltPlanPaths?: string[];
   attachmentSeven?: AttachmentSevenData;
   reportSections: ReportSection[];
   attachments: AttachmentSlot[];

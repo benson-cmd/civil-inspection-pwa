@@ -370,13 +370,19 @@ export default function HomePage() {
             {activeTab === "attachment5" ? (
               <AttachmentFiveEditor
                 rows={activeCase.levelMeasurements ?? []}
-                onChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
+                planPaths={activeCase.levelPlanPaths ?? []}
+                onRowsChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
+                onPlanPathsChange={(levelPlanPaths) => updateCase({ ...activeCase, levelPlanPaths })}
+                onPhotoUpload={(row, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-five/${row.id}`, file)}
               />
             ) : null}
             {activeTab === "attachment6" ? (
               <AttachmentSixEditor
                 rows={activeCase.tiltMeasurements ?? []}
-                onChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
+                planPaths={activeCase.tiltPlanPaths ?? []}
+                onRowsChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
+                onPlanPathsChange={(tiltPlanPaths) => updateCase({ ...activeCase, tiltPlanPaths })}
+                onPhotoUpload={(row, slot, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-six/${row.id}/${slot}`, file)}
               />
             ) : null}
             {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
@@ -393,8 +399,8 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean
   { id: "basic", label: "基本資料", available: true },
   { id: "main", label: "封面/目錄/主文", available: true },
   { id: "attachments", label: "附件管理", available: true },
-  { id: "attachment5", label: "附件五 水準測量", available: false },
-  { id: "attachment6", label: "附件六 傾斜率", available: false },
+  { id: "attachment5", label: "附件五 水準測量", available: true },
+  { id: "attachment6", label: "附件六 傾斜率", available: true },
   { id: "attachment7", label: "附件七 現況照片", available: true },
   { id: "attachment8", label: "附件八 基地照片", available: true },
   { id: "export", label: "匯出報告", available: true },
@@ -1537,8 +1543,18 @@ function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
         </div>
       </Panel>
       <Panel title="目前可匯出" icon={<FileText size={18} />}>
-        <p className="mb-3 text-sm text-muted">目前先保留附件七/八 HTML to PDF 匯出。完整報告 PDF 需要下一階段加入封面/目錄/主文模板與附件 PDF 合併。</p>
-        <PdfExportButton project={activeCase.project} target={activeCase.target} floors={[]} points={[]} sitePhotos={[]} />
+        <p className="mb-3 text-sm text-muted">目前可匯出附件五、附件六、附件七與附件八的 HTML to PDF 預覽；完整封面/目錄/主文合併會在下一階段納入。</p>
+        <PdfExportButton
+          project={activeCase.project}
+          target={activeCase.target}
+          floors={[]}
+          points={[]}
+          sitePhotos={activeCase.sitePhotos ?? []}
+          levelMeasurements={activeCase.levelMeasurements ?? []}
+          levelPlanPaths={activeCase.levelPlanPaths ?? []}
+          tiltMeasurements={activeCase.tiltMeasurements ?? []}
+          tiltPlanPaths={activeCase.tiltPlanPaths ?? []}
+        />
       </Panel>
     </div>
   );

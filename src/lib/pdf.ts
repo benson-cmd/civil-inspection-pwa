@@ -1,4 +1,4 @@
-import type { Floor, InspectionPoint, Project, SitePhoto, Target } from "@/types/inspection";
+import type { Floor, InspectionPoint, LevelMeasurement, Project, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildPhotoCaption } from "./caption";
 
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
@@ -13,8 +13,22 @@ export function buildReportHtml(input: {
   floors: Floor[];
   points: InspectionPoint[];
   sitePhotos?: SitePhoto[];
+  levelMeasurements?: LevelMeasurement[];
+  levelPlanPaths?: string[];
+  tiltMeasurements?: TiltMeasurement[];
+  tiltPlanPaths?: string[];
 }) {
-  const { project, target, floors, points, sitePhotos = [] } = input;
+  const {
+    project,
+    target,
+    floors,
+    points,
+    sitePhotos = [],
+    levelMeasurements = [],
+    levelPlanPaths = [],
+    tiltMeasurements = [],
+    tiltPlanPaths = [],
+  } = input;
   const floorsWithData = floors.filter((floor) => points.some((point) => point.floorId === floor.id));
   const photoPoints = points.filter((point) => point.photo?.imageUrl);
 
@@ -26,6 +40,8 @@ export function buildReportHtml(input: {
       <style>${reportCss}</style>
     </head>
     <body>
+      ${buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths)}
+      ${buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths)}
       ${floorsWithData.map((floor, index) => buildFloorPlanPage(project, target, floor, index + 1)).join("")}
       ${points.length ? buildInspectionTablePage(project, target, floors, points, floorsWithData.length + 1) : ""}
       ${chunk(photoPoints, 2)
@@ -36,6 +52,134 @@ export function buildReportHtml(input: {
         .join("")}
     </body>
   </html>`;
+}
+
+function buildLevelMeasurementPages(project: Project, rows: LevelMeasurement[], planPaths: string[]) {
+  const effectiveRows = rows.filter((row) => row.pointNo || row.location || row.relativeElevation || row.initialElevation || row.photo?.imageUrl);
+  if (!effectiveRows.length && !planPaths.length) return "";
+  const photoRows = effectiveRows.filter((row) => row.photo?.imageUrl);
+  return `
+    ${effectiveRows.length ? buildLevelTablePage(project, effectiveRows, 1) : ""}
+    ${planPaths.length || effectiveRows.some((row) => row.x != null && row.y != null) ? buildMeasurementPlanPage("水準測量位置示意圖", "附件五", 2, planPaths, effectiveRows.map((row) => ({ label: row.pointNo || "測點", x: row.x, y: row.y }))) : ""}
+    ${chunk(photoRows, 2).map((cards, index) => buildLevelPhotoPage(cards, 3 + index)).join("")}
+  `;
+}
+
+function buildLevelTablePage(project: Project, rows: LevelMeasurement[], attachmentPage: number) {
+  const tableRows = [...rows, ...Array.from({ length: Math.max(0, 18 - rows.length) }, () => null)]
+    .map((row) =>
+      row
+        ? `<tr><td>${escapeHtml(row.pointNo)}</td><td class="text-left">${escapeHtml(row.location || `詳水準測量位置示意圖及${row.pointNo}現況照片`)}</td><td>${escapeHtml(row.relativeElevation || row.initialElevation)}</td><td class="text-left">${escapeHtml(row.note)}</td></tr>`
+        : `<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>`,
+    )
+    .join("");
+  return `
+    <section class="page measurement-table-page">
+      <h2>社團法人臺中市土木技師公會　　鑑定報告書現況測量資料</h2>
+      <h1>${escapeHtml(project.projectName)}</h1>
+      <div class="measurement-subtitle"><span>時間：${formatRocDate(project.inspectionDate)}</span><span>水準測量紀錄表</span></div>
+      <table class="measurement-table level-table">
+        <tbody>
+          <tr><th>測點<br>編號</th><th>位置</th><th>相對<br>高程</th><th>備　　註</th></tr>
+          ${tableRows}
+        </tbody>
+      </table>
+      <div class="footer">附件五-${attachmentPage}</div>
+    </section>`;
+}
+
+function buildLevelPhotoPage(rows: LevelMeasurement[], attachmentPage: number) {
+  return `
+    <section class="page measurement-photo-page">
+      <h1>社團法人臺中市土木技師公會　　鑑定報告書現況照片</h1>
+      ${rows
+        .map(
+          (row, index) => `
+            <article class="measurement-photo-card">
+              <div class="measurement-photo-info">
+                <div class="info-label">編號<br>${escapeHtml(String(index + 1))}</div>
+                <div class="info-label">說　明</div>
+                <div class="info-content">${escapeHtml(row.pointNo)} ${escapeHtml(row.photo?.caption || "水準點現況")}<br>(攝於 ${formatRocDate(row.measurementDate || row.photo?.takenAt || "")})</div>
+              </div>
+              <div class="measurement-photo-box"><img src="${escapeHtml(row.photo?.imageUrl ?? "")}" alt="${escapeHtml(row.pointNo)}" /></div>
+            </article>`,
+        )
+        .join("")}
+      <div class="footer">附件五-${attachmentPage}</div>
+    </section>`;
+}
+
+function buildTiltMeasurementPages(project: Project, rows: TiltMeasurement[], planPaths: string[]) {
+  const effectiveRows = rows.filter((row) => row.lineNo || row.location || row.floorHeight || row.upperPhoto?.imageUrl || row.lowerPhoto?.imageUrl);
+  if (!effectiveRows.length && !planPaths.length) return "";
+  const photoRows = effectiveRows.filter((row) => row.upperPhoto?.imageUrl || row.lowerPhoto?.imageUrl);
+  return `
+    ${effectiveRows.length ? buildTiltTablePage(project, effectiveRows, 1) : ""}
+    ${planPaths.length || effectiveRows.some((row) => row.x != null && row.y != null) ? buildMeasurementPlanPage("傾斜測量位置示意圖", "附件六", 2, planPaths, effectiveRows.map((row) => ({ label: row.lineNo || "Z", x: row.x, y: row.y }))) : ""}
+    ${chunk(photoRows, 2).map((cards, index) => buildTiltPhotoPage(cards, 3 + index)).join("")}
+  `;
+}
+
+function buildTiltTablePage(project: Project, rows: TiltMeasurement[], attachmentPage: number) {
+  const tableRows = rows
+    .map((row) => {
+      const displacement = tiltDisplacement(row);
+      const ratio = tiltRatio(row);
+      return `<tr><td>${escapeHtml(row.lineNo)}</td><td class="text-left">${escapeHtml(row.location)}</td><td>${formatRocDate(row.measurementDate || project.inspectionDate)}</td><td>${escapeHtml(row.floorHeight)} M</td><td>${displacement == null ? "" : `${(displacement / 1000).toFixed(5)} M`}</td><td>${ratio == null ? "" : formatTiltRatio(displacement, ratio)}</td></tr>`;
+    })
+    .join("");
+  return `
+    <section class="page measurement-table-page">
+      <h2>社團法人臺中市土木技師公會　　鑑定報告書現況測量資料</h2>
+      <h1>案名：${escapeHtml(project.projectName)}</h1>
+      <div class="measurement-subtitle"><span></span><span>紀錄總表</span></div>
+      <table class="measurement-table tilt-table">
+        <tbody>
+          <tr><th>編號</th><th>內容</th><th>日期</th><th>測量值H</th><th>傾斜值e</th><th>傾斜度</th></tr>
+          ${tableRows}
+        </tbody>
+      </table>
+      <div class="footer">附件六-${attachmentPage}</div>
+    </section>`;
+}
+
+function buildTiltPhotoPage(rows: TiltMeasurement[], attachmentPage: number) {
+  return `
+    <section class="page measurement-photo-page">
+      <h1>社團法人臺中市土木技師公會　　鑑定報告書現況照片</h1>
+      ${rows.map((row) => buildTiltPhotoCard(row)).join("")}
+      <div class="footer">附件六-${attachmentPage}</div>
+    </section>`;
+}
+
+function buildTiltPhotoCard(row: TiltMeasurement) {
+  const displacement = tiltDisplacement(row);
+  const ratio = tiltRatio(row);
+  return `
+    <article class="tilt-photo-card">
+      <div class="measurement-photo-info">
+        <div class="info-label">編號<br>${escapeHtml(row.lineNo)}</div>
+        <div class="info-label">說明</div>
+        <div class="info-content">項目：建築物垂直測量<br>內容：${escapeHtml(row.location)}</div>
+      </div>
+      <div class="tilt-photo-grid">
+        ${row.upperPhoto?.imageUrl ? `<img src="${escapeHtml(row.upperPhoto.imageUrl)}" alt="${escapeHtml(row.lineNo)}-A" />` : "<div></div>"}
+        ${row.lowerPhoto?.imageUrl ? `<img src="${escapeHtml(row.lowerPhoto.imageUrl)}" alt="${escapeHtml(row.lineNo)}-B" />` : "<div></div>"}
+      </div>
+      <table class="tilt-card-table"><tbody><tr><th>測量點</th><th>日期</th><th>測量值 H</th><th>傾斜值 e</th><th>傾斜度</th></tr><tr><td>${escapeHtml(row.lineNo)}-A,${escapeHtml(row.lineNo)}-B</td><td>${formatRocDate(row.measurementDate || row.upperPhoto?.takenAt || "")}</td><td>${escapeHtml(row.floorHeight)}</td><td>${displacement == null ? "" : (displacement / 1000).toFixed(4)}</td><td>${ratio == null ? "" : formatTiltRatio(displacement, ratio)}</td></tr></tbody></table>
+    </article>`;
+}
+
+function buildMeasurementPlanPage(title: string, attachmentName: string, attachmentPage: number, paths: string[], markers: Array<{ label: string; x?: number; y?: number }>) {
+  return `
+    <section class="page measurement-plan-page">
+      <div class="vertical-title left">社團法人臺中市土木技師公會</div>
+      <div class="vertical-title right">${escapeHtml(title)}</div>
+      <div class="measurement-plan-frame">
+        ${serializeMeasurementPlan(paths, markers)}
+      </div>
+      <div class="footer">${attachmentName}-${attachmentPage}</div>
+    </section>`;
 }
 
 function buildFloorPlanPage(project: Project, target: Target, floor: Floor, attachmentPage: number) {
@@ -247,6 +391,37 @@ body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", 
 .photo-box { height: 88mm; display: grid; place-items: center; overflow: hidden; }
 .photo-box img { width: 100%; height: 100%; object-fit: contain; }
 .side-page { position: absolute; right: 9mm; bottom: 33mm; text-align: center; color: #d00; font-size: 22px; line-height: 1.9; }
+.measurement-table-page h2 { margin: 8mm 0 5mm; text-align: center; font-size: 20px; font-weight: 400; }
+.measurement-table-page h1 { margin: 0 0 6mm; font-size: 18px; font-weight: 400; line-height: 1.5; }
+.measurement-subtitle { display: flex; justify-content: space-between; margin-bottom: 2mm; font-size: 17px; }
+.measurement-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 16px; }
+.measurement-table th, .measurement-table td { border: 1px solid #111; padding: 2mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.35; }
+.measurement-table .text-left { text-align: left; }
+.level-table th:first-child, .level-table td:first-child { width: 18mm; }
+.level-table th:nth-child(3), .level-table td:nth-child(3) { width: 24mm; }
+.level-table th:nth-child(4), .level-table td:nth-child(4) { width: 58mm; }
+.tilt-table th:first-child, .tilt-table td:first-child { width: 14mm; }
+.tilt-table th:nth-child(3), .tilt-table td:nth-child(3) { width: 27mm; }
+.tilt-table th:nth-child(4), .tilt-table td:nth-child(4), .tilt-table th:nth-child(5), .tilt-table td:nth-child(5), .tilt-table th:nth-child(6), .tilt-table td:nth-child(6) { width: 27mm; }
+.measurement-plan-page { padding: 20mm 24mm 16mm; }
+.measurement-plan-frame { position: absolute; left: 32mm; top: 30mm; right: 26mm; bottom: 22mm; border: 1px solid #111; display: grid; place-items: center; }
+.measurement-plan-frame svg { width: 100%; height: 100%; }
+.vertical-title { position: absolute; top: 88mm; writing-mode: vertical-rl; font-size: 26px; letter-spacing: 5px; }
+.vertical-title.left { left: 17mm; }
+.vertical-title.right { right: 9mm; }
+.measurement-photo-page { padding: 18mm 20mm 15mm; }
+.measurement-photo-page h1 { margin: 0 0 4mm; text-align: center; font-size: 20px; font-weight: 400; }
+.measurement-photo-card { margin-bottom: 5mm; height: 122mm; page-break-inside: avoid; }
+.measurement-photo-info { display: grid; grid-template-columns: 20mm 26mm 1fr; border: 1px solid #111; border-bottom: 0; font-size: 16px; }
+.measurement-photo-info > div { border-right: 1px solid #111; min-height: 18mm; padding: 2mm; display: grid; place-items: center; text-align: center; }
+.measurement-photo-info > div:last-child { border-right: 0; justify-items: start; text-align: left; }
+.measurement-photo-box { height: 95mm; border: 1px solid #111; display: grid; place-items: center; overflow: hidden; }
+.measurement-photo-box img { width: 100%; height: 100%; object-fit: contain; }
+.tilt-photo-card { margin-bottom: 4mm; height: 124mm; page-break-inside: avoid; }
+.tilt-photo-grid { height: 78mm; border-left: 1px solid #111; border-right: 1px solid #111; display: grid; place-items: center; gap: 2mm; padding: 2mm; }
+.tilt-photo-grid img { max-width: 100%; max-height: 36mm; object-fit: contain; }
+.tilt-card-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tilt-card-table th, .tilt-card-table td { border: 1px solid #111; text-align: center; padding: 1.5mm; }
 `;
 
 function renderChecks(options: string[], value: string, checked = "■", unchecked = "□") {
@@ -262,6 +437,47 @@ function formatDate(date: string) {
   if (Number.isNaN(parsed.getTime())) return escapeHtml(date);
   const year = parsed.getFullYear() - 1911;
   return `中華民國 ${year} 年 ${String(parsed.getMonth() + 1).padStart(2, "0")} 月 ${String(parsed.getDate()).padStart(2, "0")} 日`;
+}
+
+function formatRocDate(date: string) {
+  if (!date) return "";
+  const value = date.includes("T") ? date.slice(0, 10) : date;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return escapeHtml(date);
+  return `${parsed.getFullYear() - 1911}.${parsed.getMonth() + 1}.${parsed.getDate()}`;
+}
+
+function tiltDisplacement(row: TiltMeasurement) {
+  const upper = Number(row.upperDistance);
+  const lower = Number(row.lowerDistance);
+  if (!Number.isFinite(upper) || !Number.isFinite(lower) || row.upperDistance === "" || row.lowerDistance === "") return null;
+  return upper - lower;
+}
+
+function tiltRatio(row: TiltMeasurement) {
+  const displacement = tiltDisplacement(row);
+  const heightM = Number(row.floorHeight);
+  if (displacement === null || displacement === 0 || !Number.isFinite(heightM) || row.floorHeight === "") return null;
+  return Math.abs((heightM * 1000) / displacement);
+}
+
+function formatTiltRatio(displacement: number | null, ratio: number) {
+  const sign = displacement != null && displacement < 0 ? "-" : "";
+  return `1/${sign}${Math.round(ratio)}`;
+}
+
+function serializeMeasurementPlan(paths: string[], markers: Array<{ label: string; x?: number; y?: number }>) {
+  const pathMarkup = paths
+    .map((path) => `<path d="${escapeHtml(path)}" fill="none" stroke="#202020" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`)
+    .join("");
+  const markerMarkup = markers
+    .filter((marker) => marker.x != null && marker.y != null)
+    .map(
+      (marker) =>
+        `<g><line x1="${(marker.x ?? 0) - 12}" y1="${marker.y}" x2="${(marker.x ?? 0) + 12}" y2="${marker.y}" stroke="#c5161d" stroke-width="3"/><line x1="${marker.x}" y1="${(marker.y ?? 0) - 12}" x2="${marker.x}" y2="${(marker.y ?? 0) + 12}" stroke="#c5161d" stroke-width="3"/><text x="${(marker.x ?? 0) + 14}" y="${(marker.y ?? 0) - 8}" fill="#c5161d" font-size="24" font-weight="700">${escapeHtml(marker.label)}</text></g>`,
+    )
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620">${pathMarkup}${markerMarkup}</svg>`;
 }
 
 function findFloorName(floors: Floor[], floorId: string) {
