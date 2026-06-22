@@ -27,6 +27,8 @@ export type FloorPlanMode = "draw" | "line" | "erase" | "photo" | "move" | "noEn
 type Mode = FloorPlanMode;
 
 const viewBox = { width: 900, height: 620 };
+const photoPressDelayMs = 180;
+const photoPressMoveTolerance = 14;
 
 export function FloorPlanCanvas({
   activeMode,
@@ -53,6 +55,7 @@ export function FloorPlanCanvas({
   const [rotatingPointId, setRotatingPointId] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState(false);
   const [draggingNoEntryCorner, setDraggingNoEntryCorner] = useState<{ zoneId: string; cornerIndex: number } | null>(null);
+  const pendingPhotoPointRef = useRef<{ point: { x: number; y: number }; pointerId: number; startedAt: number } | null>(null);
 
   const allPaths = useMemo(() => (draftPath ? [...planPaths, draftPath] : planPaths), [draftPath, planPaths]);
 
@@ -82,7 +85,12 @@ export function FloorPlanCanvas({
   function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
     const point = getSvgPoint(event);
     if (mode === "photo") {
-      onAddPoint(point);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      pendingPhotoPointRef.current = {
+        point,
+        pointerId: event.pointerId,
+        startedAt: performance.now(),
+      };
       return;
     }
 
@@ -107,6 +115,13 @@ export function FloorPlanCanvas({
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     const point = getSvgPoint(event);
+
+    if (mode === "photo" && pendingPhotoPointRef.current) {
+      if (distance(pendingPhotoPointRef.current.point, point) > photoPressMoveTolerance) {
+        pendingPhotoPointRef.current = null;
+      }
+      return;
+    }
 
     if (draggingNoEntryCorner) {
       onNoEntryZonesChange(
@@ -143,7 +158,19 @@ export function FloorPlanCanvas({
     }
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (mode === "photo" && pendingPhotoPointRef.current) {
+      const pending = pendingPhotoPointRef.current;
+      pendingPhotoPointRef.current = null;
+      const releasedPoint = getSvgPoint(event);
+      const heldLongEnough = performance.now() - pending.startedAt >= photoPressDelayMs;
+      const stayedInPlace = distance(pending.point, releasedPoint) <= photoPressMoveTolerance;
+      if (pending.pointerId === event.pointerId && heldLongEnough && stayedInPlace) {
+        onAddPoint(pending.point);
+      }
+      return;
+    }
+
     if (rotatingPointId) {
       setRotatingPointId(null);
       return;
@@ -281,6 +308,12 @@ export function FloorPlanCanvas({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          pendingPhotoPointRef.current = null;
+          setRotatingPointId(null);
+          setMovingPointId(null);
+          setDraggingNoEntryCorner(null);
+        }}
       >
         <defs>
           <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
@@ -393,7 +426,7 @@ export function FloorPlanCanvas({
           <Eraser size={16} /> 橡皮擦模式可點選單一筆線條或 X 區域刪除。
         </div>
         <div className="inline-flex items-center gap-2">
-          <RotateCw size={16} /> 不便進入模式可拖曳 X 區域四個角點調整形狀。
+          <RotateCw size={16} /> 照片點位需按住約 0.2 秒再放開；選取點位後可拖曳紅色箭頭端點微調方向。
         </div>
       </div>
     </section>

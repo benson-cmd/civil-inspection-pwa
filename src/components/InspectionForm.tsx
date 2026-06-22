@@ -127,7 +127,20 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
             </button>
           ))}
         </div>
-        <span className="mt-1 block text-xs text-muted">{point.directionAngle}°</span>
+        <input
+          type="range"
+          min="0"
+          max="359"
+          step="1"
+          value={point.directionAngle}
+          onChange={(event) => onChange({ ...point, directionAngle: Number(event.target.value) })}
+          className="mt-3 w-full accent-[#2d6a4f]"
+          aria-label="拍攝方向角度微調"
+        />
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <span className="mono-data font-bold text-accent">{point.directionAngle}°</span>
+          <span>也可在平面圖上拖曳紅色箭頭端點微調</span>
+        </div>
       </div>
 
       <fieldset className="mb-4">
