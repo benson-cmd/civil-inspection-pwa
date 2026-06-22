@@ -44,7 +44,7 @@ export function FloorPlanCanvas({
   const [draftNoEntryZone, setDraftNoEntryZone] = useState<NoEntryZone | null>(null);
   const [movingPointId, setMovingPointId] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState(false);
-  const [noEntryAngle, setNoEntryAngle] = useState(0);
+  const [draggingNoEntryCorner, setDraggingNoEntryCorner] = useState<{ zoneId: string; cornerIndex: number } | null>(null);
 
   const allPaths = useMemo(() => (draftPath ? [...planPaths, draftPath] : planPaths), [draftPath, planPaths]);
 
@@ -74,7 +74,7 @@ export function FloorPlanCanvas({
     event.currentTarget.setPointerCapture(event.pointerId);
     if (mode === "noEntry") {
       setLineStart(point);
-      setDraftNoEntryZone({ id: "draft", x: point.x, y: point.y, width: 0, height: 0, angle: noEntryAngle });
+      setDraftNoEntryZone(buildNoEntryZone("draft", point, point));
       return;
     }
 
@@ -90,6 +90,22 @@ export function FloorPlanCanvas({
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     const point = getSvgPoint(event);
+
+    if (draggingNoEntryCorner) {
+      onNoEntryZonesChange(
+        noEntryZones.map((zone) =>
+          zone.id === draggingNoEntryCorner.zoneId
+            ? zoneFromCorners(
+                zone.id,
+                noEntryCorners(zone).map((corner, index) =>
+                  index === draggingNoEntryCorner.cornerIndex ? point : corner,
+                ),
+              )
+            : zone,
+        ),
+      );
+      return;
+    }
 
     if (mode === "noEntry" && lineStart && draftNoEntryZone) {
       setDraftNoEntryZone(buildNoEntryZone("draft", lineStart, point));
@@ -111,6 +127,11 @@ export function FloorPlanCanvas({
   }
 
   function handlePointerUp() {
+    if (draggingNoEntryCorner) {
+      setDraggingNoEntryCorner(null);
+      return;
+    }
+
     if (movingPointId) {
       setMovingPointId(null);
       return;
@@ -147,7 +168,7 @@ export function FloorPlanCanvas({
 
     if (mode === "noEntry") {
       setLineStart(point);
-      setDraftNoEntryZone({ id: "draft", x: point.x, y: point.y, width: 0, height: 0, angle: noEntryAngle });
+      setDraftNoEntryZone(buildNoEntryZone("draft", point, point));
       return;
     }
 
@@ -240,18 +261,6 @@ export function FloorPlanCanvas({
             >
               <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
             </button>
-            <label className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold">
-              X角度
-              <input
-                type="range"
-                min="-80"
-                max="80"
-                value={noEntryAngle}
-                onChange={(event) => setNoEntryAngle(Number(event.target.value))}
-                className="w-20 accent-[var(--accent)]"
-              />
-              <span className="w-9 text-right text-muted">{noEntryAngle}°</span>
-            </label>
           </div>
           <div className="h-8 w-px self-center bg-line mx-1" />
           <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
@@ -345,11 +354,8 @@ export function FloorPlanCanvas({
               onNoEntryZonesChange(noEntryZones.filter((item) => item.id !== zone.id));
             }}
           >
-            <rect
-              x={zone.x}
-              y={zone.y}
-              width={zone.width}
-              height={zone.height}
+            <polygon
+              points={noEntryCorners(zone).map((point) => `${point.x},${point.y}`).join(" ")}
               fill="rgba(255,255,255,0.45)"
               stroke="#ff2a2a"
               strokeWidth="2"
@@ -365,6 +371,25 @@ export function FloorPlanCanvas({
                 strokeWidth="2"
               />
             ))}
+            {mode === "noEntry" && zone.id !== "draft"
+              ? noEntryCorners(zone).map((corner, cornerIndex) => (
+                  <circle
+                    key={cornerIndex}
+                    cx={corner.x}
+                    cy={corner.y}
+                    r="10"
+                    fill="#ffffff"
+                    stroke="#ff2a2a"
+                    strokeWidth="3"
+                    className="cursor-move"
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      setDraggingNoEntryCorner({ zoneId: zone.id, cornerIndex });
+                    }}
+                  />
+                ))
+              : null}
           </g>
         ))}
         {points.map((point) => (
@@ -394,7 +419,7 @@ export function FloorPlanCanvas({
           <Eraser size={16} /> 橡皮擦模式可點選單一筆線條或 X 區域刪除。
         </div>
         <div className="inline-flex items-center gap-2">
-          <RotateCw size={16} /> 方向角可在右側表單調整。
+          <RotateCw size={16} /> 不便進入模式可拖曳 X 區域四個角點調整形狀。
         </div>
       </div>
     </section>
@@ -406,34 +431,66 @@ function buildLinePath(start: { x: number; y: number }, end: { x: number; y: num
 }
 
 function buildNoEntryZone(id: string, start: { x: number; y: number }, end: { x: number; y: number }): NoEntryZone {
-  return { id, x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y };
+  return zoneFromCorners(id, [
+    { x: start.x, y: start.y },
+    { x: end.x, y: start.y },
+    { x: end.x, y: end.y },
+    { x: start.x, y: end.y },
+  ]);
 }
 
 function normalizeNoEntryZone(zone: NoEntryZone): NoEntryZone {
+  return zoneFromCorners(zone.id, noEntryCorners(zone));
+}
+
+function zoneFromCorners(id: string, points: Array<{ x: number; y: number }>): NoEntryZone {
+  const normalizedPoints = orderNoEntryCorners(points);
+  const xs = normalizedPoints.map((point) => point.x);
+  const ys = normalizedPoints.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
   return {
-    ...zone,
-    x: zone.width < 0 ? zone.x + zone.width : zone.x,
-    y: zone.height < 0 ? zone.y + zone.height : zone.y,
-    width: Math.abs(zone.width),
-    height: Math.abs(zone.height),
+    id,
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+    points: normalizedPoints,
   };
 }
 
-function buildNoEntryXLines(zone: NoEntryZone) {
-  const center = {
-    x: zone.x + zone.width / 2,
-    y: zone.y + zone.height / 2,
-  };
-  const halfDiagonal = Math.hypot(zone.width, zone.height) / 2;
-  const baseAngle = Math.atan2(zone.height, zone.width);
-  const rotation = ((zone.angle ?? 0) * Math.PI) / 180;
+function noEntryCorners(zone: NoEntryZone) {
+  if (zone.points?.length === 4) return zone.points;
+  const x1 = zone.width < 0 ? zone.x + zone.width : zone.x;
+  const y1 = zone.height < 0 ? zone.y + zone.height : zone.y;
+  const x2 = x1 + Math.abs(zone.width);
+  const y2 = y1 + Math.abs(zone.height);
+  return [
+    { x: x1, y: y1 },
+    { x: x2, y: y1 },
+    { x: x2, y: y2 },
+    { x: x1, y: y2 },
+  ];
+}
 
-  return [baseAngle + rotation, -baseAngle + rotation].map((angle) => ({
-    x1: center.x - Math.cos(angle) * halfDiagonal,
-    y1: center.y - Math.sin(angle) * halfDiagonal,
-    x2: center.x + Math.cos(angle) * halfDiagonal,
-    y2: center.y + Math.sin(angle) * halfDiagonal,
-  }));
+function orderNoEntryCorners(points: Array<{ x: number; y: number }>) {
+  if (points.length !== 4) return points;
+  const center = {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+
+  return [...points].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+}
+
+function buildNoEntryXLines(zone: NoEntryZone) {
+  const corners = noEntryCorners(zone);
+  return [
+    { x1: corners[0].x, y1: corners[0].y, x2: corners[2].x, y2: corners[2].y },
+    { x1: corners[1].x, y1: corners[1].y, x2: corners[3].x, y2: corners[3].y },
+  ];
 }
 
 function snapToExistingGeometry(
@@ -518,10 +575,12 @@ export function serializePlanToSvg(paths: string[], points: InspectionPoint[], n
     .join("");
   const noEntryMarkup = noEntryZones
     .map((zone) => {
+      const corners = noEntryCorners(zone);
+      const polygonPoints = corners.map((point) => `${point.x},${point.y}`).join(" ");
       const lines = buildNoEntryXLines(zone)
         .map((line) => `<line x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}" stroke="#ff2a2a" stroke-width="2"/>`)
         .join("");
-      return `<g><rect x="${zone.x}" y="${zone.y}" width="${zone.width}" height="${zone.height}" fill="rgba(255,255,255,0.45)" stroke="#ff2a2a" stroke-width="2"/>${lines}</g>`;
+      return `<g><polygon points="${polygonPoints}" fill="rgba(255,255,255,0.45)" stroke="#ff2a2a" stroke-width="2"/>${lines}</g>`;
     })
     .join("");
   const markerMarkup = points

@@ -67,6 +67,7 @@ export interface NoEntryZone {
   width: number;
   height: number;
   angle?: number;
+  points?: Array<{ x: number; y: number }>;
 }
 
 export interface InspectionPoint {
