@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { commonRoadNames } from "@/lib/tw-address";
+import { getFallbackRoads } from "@/lib/tw-address";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 type RoadRow = {
@@ -11,14 +11,15 @@ export async function GET(request: Request) {
   const city = searchParams.get("city")?.trim();
   const district = searchParams.get("district")?.trim();
   const keyword = searchParams.get("q")?.trim();
+  const fallbackRoads = city && district ? getFallbackRoads(city, district, keyword ?? "") : getFallbackRoads("", "", keyword ?? "");
 
   if (!city || !district) {
-    return NextResponse.json({ roads: commonRoadNames, source: "fallback" });
+    return NextResponse.json({ roads: fallbackRoads, source: "fallback" });
   }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    return NextResponse.json({ roads: commonRoadNames, source: "fallback" });
+    return NextResponse.json({ roads: fallbackRoads, source: "fallback" });
   }
 
   let query = supabase
@@ -33,9 +34,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ roads: commonRoadNames, source: "fallback" });
+    return NextResponse.json({ roads: fallbackRoads, source: "fallback" });
   }
 
   const roads = Array.from(new Set(((data ?? []) as RoadRow[]).map((row) => row.road_name).filter(Boolean)));
-  return NextResponse.json({ roads: roads.length ? roads : commonRoadNames, source: roads.length ? "database" : "fallback" });
+  return NextResponse.json({ roads: roads.length ? roads : fallbackRoads, source: roads.length ? "database" : "fallback" });
 }
