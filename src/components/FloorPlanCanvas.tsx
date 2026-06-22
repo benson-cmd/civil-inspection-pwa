@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent, TouchEvent } from "react";
+import type { PointerEvent } from "react";
 import { Eraser, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
 import type { InspectionPoint, NoEntryZone } from "@/types/inspection";
 import { PhotoPointMarker } from "./PhotoPointMarker";
@@ -175,64 +175,6 @@ export function FloorPlanCanvas({
     setLineStart(null);
   }
 
-  function handleTouchStart(event: TouchEvent<SVGSVGElement>) {
-    if (event.touches.length !== 1) return;
-    event.preventDefault();
-    const touch = event.touches[0];
-    const point = getSvgPointFromClient(touch.clientX, touch.clientY);
-
-    if (mode === "photo") {
-      onAddPoint(point);
-      return;
-    }
-
-    if (mode === "move" || mode === "erase") return;
-
-    if (mode === "noEntry") {
-      setLineStart(point);
-      setDraftNoEntryZone(buildNoEntryZone("draft", point, point));
-      return;
-    }
-
-    if (mode === "line") {
-      const snappedStart = snapToExistingGeometry(point, planPaths, null);
-      setLineStart(snappedStart);
-      setDraftPath(buildLinePath(snappedStart, snappedStart));
-      return;
-    }
-
-    setDraftPath(`M ${point.x.toFixed(1)} ${point.y.toFixed(1)}`);
-  }
-
-  function handleTouchMove(event: TouchEvent<SVGSVGElement>) {
-    if (event.touches.length !== 1) return;
-    event.preventDefault();
-    const touch = event.touches[0];
-    const point = getSvgPointFromClient(touch.clientX, touch.clientY);
-
-    if (mode === "noEntry" && lineStart && draftNoEntryZone) {
-      setDraftNoEntryZone(buildNoEntryZone("draft", lineStart, point));
-      return;
-    }
-
-    if (!draftPath) return;
-
-    if (mode === "line" && lineStart) {
-      const rawEnd = snapLine ? snapToEightDirections(lineStart, point) : point;
-      const snappedEnd = snapToExistingGeometry(rawEnd, planPaths, lineStart);
-      setDraftPath(buildLinePath(lineStart, snappedEnd));
-      return;
-    }
-
-    if (mode === "draw") {
-      setDraftPath((current) => `${current} L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`);
-    }
-  }
-
-  function handleTouchEnd() {
-    handlePointerUp();
-  }
-
   return (
     <section className="workspace-panel rounded-lg border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -335,13 +277,10 @@ export function FloorPlanCanvas({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${viewBox.width} ${viewBox.height}`}
-        className="aspect-[90/62] w-full rounded-md border border-line bg-[#fafaf6]"
+        className="aspect-[90/62] w-full touch-none rounded-md border border-line bg-[#fafaf6]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
         <defs>
           <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">

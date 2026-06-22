@@ -597,16 +597,17 @@ function reportStatusBadgeClass(status: ReportStatus) {
 }
 
 async function uploadInspectionPhoto(projectId: string, scope: string, file: File) {
-  const fallbackUrl = URL.createObjectURL(file);
+  const uploadFile = await compressImageForUpload(file);
+  const fallbackUrl = URL.createObjectURL(uploadFile);
   const supabase = createSupabaseBrowserClient();
   if (!supabase) return { imageUrl: fallbackUrl };
 
-  const safeName = file.name.replace(/[^\w.-]+/g, "-");
+  const safeName = uploadFile.name.replace(/[^\w.-]+/g, "-");
   const storagePath = `${projectId}/${scope}/${crypto.randomUUID()}-${safeName}`;
   const { error: uploadError } = await supabase.storage
     .from("ci-inspection-photos")
-    .upload(storagePath, file, {
-      contentType: file.type || "image/jpeg",
+    .upload(storagePath, uploadFile, {
+      contentType: uploadFile.type || "image/jpeg",
       upsert: true,
     });
 
@@ -625,6 +626,52 @@ async function uploadInspectionPhoto(projectId: string, scope: string, file: Fil
     imageUrl: signedData?.signedUrl ?? fallbackUrl,
     storagePath,
   };
+}
+
+async function compressImageForUpload(file: File) {
+  if (!file.type.startsWith("image/")) return file;
+  if (file.type === "image/heic" || file.type === "image/heif") return file;
+  if (typeof window === "undefined") return file;
+
+  const maxSize = 1600;
+  const quality = 0.78;
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImage(objectUrl);
+    const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+    if (scale >= 1 && file.size <= 900 * 1024) return file;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob) return file;
+
+    const baseName = file.name.replace(/\.[^.]+$/, "");
+    return new File([blob], `${baseName}-compressed.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch (error) {
+    console.error("Failed to compress photo before upload", error);
+    return file;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("圖片無法讀取，改以上傳原圖處理。"));
+    image.src = src;
+  });
 }
 
 function formatRocDate(date: string | undefined) {
