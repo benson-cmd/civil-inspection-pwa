@@ -6,6 +6,11 @@ type RoadRow = {
   road_name: string;
 };
 
+type RoadQueryResult = {
+  data: RoadRow[] | null;
+  error: unknown;
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const city = searchParams.get("city")?.trim();
@@ -32,7 +37,13 @@ export async function GET(request: Request) {
 
   if (keyword) query = query.ilike("road_name", `%${keyword}%`);
 
-  const { data, error } = await query;
+  const { data, error } = await Promise.race<RoadQueryResult>([
+    query.then((result) => ({ data: result.data as RoadRow[] | null, error: result.error })),
+    new Promise<RoadQueryResult>((resolve) => {
+      setTimeout(() => resolve({ data: null, error: new Error("Address road lookup timed out") }), 1800);
+    }),
+  ]);
+
   if (error) {
     return NextResponse.json({ roads: fallbackRoads, source: "fallback" });
   }
