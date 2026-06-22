@@ -21,11 +21,12 @@ interface InspectionFormProps {
   point?: InspectionPoint;
   onChange: (point: InspectionPoint) => void;
   onDelete: (pointId: string) => void;
+  onComplete: () => void;
   onContinue: () => void;
   onPhotoUpload: (point: InspectionPoint, file: File) => void;
 }
 
-export function InspectionForm({ point, onChange, onDelete, onContinue, onPhotoUpload }: InspectionFormProps) {
+export function InspectionForm({ point, onChange, onDelete, onComplete, onContinue, onPhotoUpload }: InspectionFormProps) {
   if (!point) {
     return (
       <aside className="grid min-h-72 place-items-center rounded-lg border border-dashed border-line bg-paper p-6 text-center text-muted">
@@ -89,6 +90,13 @@ export function InspectionForm({ point, onChange, onDelete, onContinue, onPhotoU
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
           >
             <Trash2 size={18} /> 刪除
+          </button>
+          <button
+            type="button"
+            onClick={onComplete}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white"
+          >
+            完成本點
           </button>
           <button
             type="button"

@@ -551,6 +551,36 @@ function buildEngineerSignature(project: Project) {
   return ["社團法人臺中市土木技師公會", ...lines].join("\n");
 }
 
+function getInspectionPointWarnings(point: InspectionPoint) {
+  const warnings: string[] = [];
+  if (!point.photo?.imageUrl) warnings.push("未拍照");
+  if (point.conditionType.includes("裂縫") && point.crackWidthMm == null) warnings.push("缺裂縫寬");
+  if (!point.photo?.caption && !point.note.trim()) warnings.push("缺說明");
+  return warnings;
+}
+
+function buildAttachmentSevenFloors(activeCase: InspectionCase): Floor[] {
+  const data = activeCase.attachmentSeven;
+  if (!data) return [];
+
+  return data.targets.flatMap((target) =>
+    (data.floorNamesByTarget[target.id] ?? defaultFloorNames).map((floorName) => {
+      const floorId = floorIdForTarget(target.id, floorName);
+      const floorPoints = data.points.filter((point) => point.floorId === floorId);
+      return {
+        id: floorId,
+        targetId: target.id,
+        floorName,
+        planSvgOrJson: serializePlanToSvg(
+          data.plansByTargetFloor[target.id]?.[floorName] ?? [],
+          floorPoints,
+          data.noEntryZonesByTargetFloor[target.id]?.[floorName] ?? [],
+        ),
+      };
+    }),
+  );
+}
+
 function formatEngineerNames(project: Project) {
   return getProjectEngineers(project)
     .map((engineer) => engineer.name.trim())
@@ -1521,6 +1551,11 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
               if (!movingPoint) return;
               updatePoint({ ...movingPoint, x: position.x, y: position.y });
             }}
+            onRotatePoint={(pointId, directionAngle) => {
+              const rotatingPoint = points.find((point) => point.id === pointId);
+              if (!rotatingPoint) return;
+              updatePoint({ ...rotatingPoint, directionAngle });
+            }}
             onSelectPoint={setActivePointId}
             onModeChange={setFloorPlanMode}
             onClearPlan={() => updateActivePlan([])}
@@ -1541,6 +1576,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                 <thead>
                   <tr className="bg-[#e7e5e4] text-left">
                     <th className="border border-line p-2">照片編號</th>
+                    <th className="border border-line p-2">狀態</th>
                     <th className="border border-line p-2">樓層</th>
                     <th className="border border-line p-2">位置</th>
                     <th className="border border-line p-2">現況/缺失</th>
@@ -1551,51 +1587,67 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                   </tr>
                 </thead>
                 <tbody>
-                  {floorPoints.map((point) => (
-                    <tr
-                      key={point.id}
-                      onClick={() => setActivePointId(point.id)}
-                      className={`cursor-pointer ${point.id === activePointId ? "bg-[#f5f5f4]" : "bg-white"}`}
-                    >
-                      <td className="mono-data border border-line p-2 font-bold text-accent">#{point.photoNo}</td>
-                      <td className="mono-data border border-line p-2">{activeFloorName}</td>
-                      <td className="border border-line p-2">{point.componentType.join("、")}</td>
-                      <td className="border border-line p-2">{point.conditionType.join("、")}</td>
-                      <td className="mono-data border border-line p-2">{point.crackWidthMm ?? ""}</td>
-                      <td className="border border-line p-2">
-                        <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-xs font-semibold text-accent">
-                          {point.photo?.imageUrl ? "更換照片" : "上傳照片"}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="absolute inset-0 cursor-pointer opacity-0"
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => {
+                  {floorPoints.map((point) => {
+                    const statusBadges = getInspectionPointWarnings(point);
+                    return (
+                      <tr
+                        key={point.id}
+                        onClick={() => setActivePointId(point.id)}
+                        className={`cursor-pointer ${point.id === activePointId ? "bg-[#f5f5f4]" : "bg-white"}`}
+                      >
+                        <td className="mono-data border border-line p-2 font-bold text-accent">#{point.photoNo}</td>
+                        <td className="border border-line p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {statusBadges.length ? (
+                              statusBadges.map((badge) => (
+                                <span key={badge} className="rounded bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                                  {badge}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">完成</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="mono-data border border-line p-2">{activeFloorName}</td>
+                        <td className="border border-line p-2">{point.componentType.join("、")}</td>
+                        <td className="border border-line p-2">{point.conditionType.join("、")}</td>
+                        <td className="mono-data border border-line p-2">{point.crackWidthMm ?? ""}</td>
+                        <td className="border border-line p-2">
+                          <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-xs font-semibold text-accent">
+                            {point.photo?.imageUrl ? "更換照片" : "上傳照片"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="absolute inset-0 cursor-pointer opacity-0"
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) => {
+                                event.stopPropagation();
+                                const file = event.target.files?.[0];
+                                if (file) void attachPhotoToPoint(point, file);
+                                event.target.value = "";
+                              }}
+                            />
+                          </label>
+                        </td>
+                        <td className="border border-line p-2">{point.note}</td>
+                        <td className="border border-line p-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
                               event.stopPropagation();
-                              const file = event.target.files?.[0];
-                              if (file) void attachPhotoToPoint(point, file);
-                              event.target.value = "";
+                              deletePoint(point.id);
                             }}
-                          />
-                        </label>
-                      </td>
-                      <td className="border border-line p-2">{point.note}</td>
-                      <td className="border border-line p-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            deletePoint(point.id);
-                          }}
-                          className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-white px-2 text-muted"
-                          aria-label={`刪除照片點位 ${point.photoNo}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                            className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-white px-2 text-muted"
+                            aria-label={`刪除照片點位 ${point.photoNo}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1606,7 +1658,11 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           point={activePoint}
           onChange={updatePoint}
           onDelete={deletePoint}
-          onContinue={() => setFloorPlanMode("photo")}
+          onComplete={() => setActivePointId(undefined)}
+          onContinue={() => {
+            setActivePointId(undefined);
+            setFloorPlanMode("photo");
+          }}
           onPhotoUpload={(point, file) => void attachPhotoToPoint(point, file)}
         />
       </section>
@@ -1710,30 +1766,71 @@ function AttachmentEightEditor({ activeCase, onChange }: { activeCase: Inspectio
 
 function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
   const engineers = getProjectEngineers(activeCase.project);
+  const attachmentSevenFloors = buildAttachmentSevenFloors(activeCase);
+  const attachmentSevenPoints = activeCase.attachmentSeven?.points ?? [];
+  const missingPhotoPoints = attachmentSevenPoints.filter((point) => !point.photo?.imageUrl);
+  const missingCrackWidths = attachmentSevenPoints.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
+  const missingCaptions = attachmentSevenPoints.filter((point) => !point.photo?.caption && !point.note.trim());
+  const floorsMissingPlans = attachmentSevenFloors.filter((floor) => !floor.planSvgOrJson.includes("<path"));
+  const levelRowsMissingPhotos = (activeCase.levelMeasurements ?? []).filter((row) => (row.pointNo || row.location || row.relativeElevation) && !row.photo?.imageUrl);
+  const tiltRowsMissingPhotos = (activeCase.tiltMeasurements ?? []).filter(
+    (row) => (row.lineNo || row.location || row.floorHeight) && (!row.upperPhoto?.imageUrl || !row.lowerPhoto?.imageUrl),
+  );
   const checklist = [
     {
-      id: "case-no",
-      status: activeCase.project.caseNo.trim() ? "complete" : "missing",
-      text: "案件編號已填寫",
-      hint: "請先在基本資料填寫案件編號。",
+      id: "basic",
+      status:
+        activeCase.project.caseNo.trim() &&
+        activeCase.project.projectName.trim() &&
+        activeCase.project.applicantName.trim() &&
+        activeCase.project.inspectionDate.trim() &&
+        engineers.some((engineer) => engineer.name.trim())
+          ? "complete"
+          : "missing",
+      text: "基本資料完整",
+      hint: "需填案件編號、案件名稱、申請單位、鑑定日期與鑑定技師。",
     },
     {
-      id: "engineer",
-      status: engineers.some((engineer) => engineer.name.trim()) ? "complete" : "missing",
-      text: "鑑定技師已填寫",
-      hint: "請至少填寫一位鑑定技師姓名。",
+      id: "target-address",
+      status: activeCase.target.address.trim() ? "complete" : "missing",
+      text: "標的物已有地址",
+      hint: "請在基本資料或附件七標的物填寫地址。",
     },
     {
-      id: "final-date",
-      status: activeCase.project.finalDate ? "complete" : "missing",
-      text: "完稿日期已填寫",
-      hint: "請在基本資料填寫完稿日期。",
+      id: "floor-plan",
+      status: attachmentSevenFloors.length === 0 || floorsMissingPlans.length === 0 ? "complete" : "missing",
+      text: "樓層已有平面圖",
+      hint: floorsMissingPlans.length ? `${floorsMissingPlans.length} 個樓層尚未繪製平面圖。` : "附件七已有樓層平面圖。",
     },
     {
-      id: "attachment-seven",
-      status: (activeCase.attachmentSeven?.points.length ?? 0) > 0 ? "complete" : "missing",
-      text: "附件七已有照片點位",
-      hint: "請在附件七至少建立一個照片點位。",
+      id: "photo-upload",
+      status: missingPhotoPoints.length === 0 ? "complete" : "missing",
+      text: "照片點已上傳照片",
+      hint: missingPhotoPoints.length ? `${missingPhotoPoints.length} 個照片點未拍照。` : "附件七照片點均已上傳照片。",
+    },
+    {
+      id: "crack-width",
+      status: missingCrackWidths.length === 0 ? "complete" : "missing",
+      text: "裂縫寬度已填寫",
+      hint: missingCrackWidths.length ? `${missingCrackWidths.length} 個裂縫點缺裂縫寬。` : "勾選裂縫者均已填裂縫寬。",
+    },
+    {
+      id: "caption",
+      status: missingCaptions.length === 0 ? "complete" : "missing",
+      text: "照片說明存在",
+      hint: missingCaptions.length ? `${missingCaptions.length} 個照片點缺說明或備註。` : "照片點已有說明來源。",
+    },
+    {
+      id: "level-photo",
+      status: levelRowsMissingPhotos.length === 0 ? "complete" : "missing",
+      text: "水準測量照片完整",
+      hint: levelRowsMissingPhotos.length ? `${levelRowsMissingPhotos.length} 個水準測點未上傳照片。` : "水準測量無缺照片測點。",
+    },
+    {
+      id: "tilt-photo",
+      status: tiltRowsMissingPhotos.length === 0 ? "complete" : "missing",
+      text: "傾斜測量照片完整",
+      hint: tiltRowsMissingPhotos.length ? `${tiltRowsMissingPhotos.length} 個傾斜測線缺 A/B 照片。` : "傾斜測量無缺照片測線。",
     },
   ] satisfies Array<{ id: string; status: "complete" | "missing"; text: string; hint: string }>;
   const completedCount = checklist.filter((item) => item.status === "complete").length;
@@ -1767,8 +1864,8 @@ function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
         <PdfExportButton
           project={activeCase.project}
           target={activeCase.target}
-          floors={[]}
-          points={[]}
+          floors={attachmentSevenFloors}
+          points={attachmentSevenPoints}
           sitePhotos={activeCase.sitePhotos ?? []}
           levelMeasurements={activeCase.levelMeasurements ?? []}
           levelPlanPaths={activeCase.levelPlanPaths ?? []}

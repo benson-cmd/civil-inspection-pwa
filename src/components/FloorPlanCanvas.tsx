@@ -16,6 +16,7 @@ interface FloorPlanCanvasProps {
   onNoEntryZonesChange: (zones: NoEntryZone[]) => void;
   onAddPoint: (position: { x: number; y: number }) => void;
   onMovePoint: (pointId: string, position: { x: number; y: number }) => void;
+  onRotatePoint: (pointId: string, directionAngle: number) => void;
   onSelectPoint: (pointId: string) => void;
   onClearPlan: () => void;
   onUndoPlan: () => void;
@@ -37,6 +38,7 @@ export function FloorPlanCanvas({
   onNoEntryZonesChange,
   onAddPoint,
   onMovePoint,
+  onRotatePoint,
   onSelectPoint,
   onClearPlan,
   onUndoPlan,
@@ -48,6 +50,7 @@ export function FloorPlanCanvas({
   const [draftPath, setDraftPath] = useState("");
   const [draftNoEntryZone, setDraftNoEntryZone] = useState<NoEntryZone | null>(null);
   const [movingPointId, setMovingPointId] = useState<string | null>(null);
+  const [rotatingPointId, setRotatingPointId] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState(false);
   const [draggingNoEntryCorner, setDraggingNoEntryCorner] = useState<{ zoneId: string; cornerIndex: number } | null>(null);
 
@@ -141,6 +144,11 @@ export function FloorPlanCanvas({
   }
 
   function handlePointerUp() {
+    if (rotatingPointId) {
+      setRotatingPointId(null);
+      return;
+    }
+
     if (draggingNoEntryCorner) {
       setDraggingNoEntryCorner(null);
       return;
@@ -421,6 +429,19 @@ export function FloorPlanCanvas({
               onMovePoint(pointId, getSvgPoint(event));
             }}
             onMoveEnd={() => setMovingPointId(null)}
+            onRotateStart={(pointId) => {
+              onSelectPoint(pointId);
+              setRotatingPointId(pointId);
+            }}
+            onRotate={(pointId, event) => {
+              if (rotatingPointId !== pointId) return;
+              const rotatingPoint = points.find((point) => point.id === pointId);
+              if (!rotatingPoint) return;
+              const pointer = getSvgPointFromClient(event.clientX, event.clientY);
+              const angle = normalizeAngle((Math.atan2(pointer.y - rotatingPoint.y, pointer.x - rotatingPoint.x) * 180) / Math.PI);
+              onRotatePoint(pointId, angle);
+            }}
+            onRotateEnd={() => setRotatingPointId(null)}
           />
         ))}
       </svg>
@@ -438,6 +459,10 @@ export function FloorPlanCanvas({
       </div>
     </section>
   );
+}
+
+function normalizeAngle(angle: number) {
+  return Math.round((angle + 360) % 360);
 }
 
 function buildLinePath(start: { x: number; y: number }, end: { x: number; y: number }) {
