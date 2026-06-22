@@ -367,8 +367,18 @@ export default function HomePage() {
             {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
-            {activeTab === "attachment5" ? <AttachmentFiveEditor /> : null}
-            {activeTab === "attachment6" ? <AttachmentSixEditor /> : null}
+            {activeTab === "attachment5" ? (
+              <AttachmentFiveEditor
+                rows={activeCase.levelMeasurements ?? []}
+                onChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
+              />
+            ) : null}
+            {activeTab === "attachment6" ? (
+              <AttachmentSixEditor
+                rows={activeCase.tiltMeasurements ?? []}
+                onChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
+              />
+            ) : null}
             {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
@@ -435,6 +445,37 @@ function reportStatusBadgeClass(status: ReportStatus) {
   if (status === "完稿") return "bg-green-100 text-green-700";
   if (status === "已歸檔") return "bg-stone-100 text-stone-500";
   return "bg-gray-100 text-gray-600";
+}
+
+async function uploadInspectionPhoto(projectId: string, scope: string, file: File) {
+  const fallbackUrl = URL.createObjectURL(file);
+  const supabase = createSupabaseBrowserClient();
+  if (!supabase) return { imageUrl: fallbackUrl };
+
+  const safeName = file.name.replace(/[^\w.-]+/g, "-");
+  const storagePath = `${projectId}/${scope}/${crypto.randomUUID()}-${safeName}`;
+  const { error: uploadError } = await supabase.storage
+    .from("ci-inspection-photos")
+    .upload(storagePath, file, {
+      contentType: file.type || "image/jpeg",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error("Failed to upload inspection photo", uploadError);
+    return { imageUrl: fallbackUrl };
+  }
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from("ci-inspection-photos")
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+
+  if (signedError) console.error("Failed to create signed photo URL", signedError);
+
+  return {
+    imageUrl: signedData?.signedUrl ?? fallbackUrl,
+    storagePath,
+  };
 }
 
 function formatRocDate(date: string | undefined) {
@@ -1062,15 +1103,16 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     if (activePointId === pointId) setActivePointId(undefined);
   }
 
-  function attachPhotoToPoint(point: InspectionPoint, file: File) {
-    const imageUrl = URL.createObjectURL(file);
+  async function attachPhotoToPoint(point: InspectionPoint, file: File) {
+    const uploaded = await uploadInspectionPhoto(project.id, `attachment-seven/${point.id}`, file);
     const caption = point.photo?.caption || buildPhotoCaption(point);
     updatePoint({
       ...point,
       photo: {
         id: point.photo?.id ?? crypto.randomUUID(),
         pointId: point.id,
-        imageUrl,
+        imageUrl: uploaded.imageUrl,
+        storagePath: uploaded.storagePath,
         caption,
         takenAt: new Date().toISOString(),
       },
@@ -1306,7 +1348,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                             onChange={(event) => {
                               event.stopPropagation();
                               const file = event.target.files?.[0];
-                              if (file) attachPhotoToPoint(point, file);
+                              if (file) void attachPhotoToPoint(point, file);
                               event.target.value = "";
                             }}
                           />
@@ -1339,6 +1381,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           onChange={updatePoint}
           onDelete={deletePoint}
           onContinue={() => setFloorPlanMode("photo")}
+          onPhotoUpload={(point, file) => void attachPhotoToPoint(point, file)}
         />
       </section>
 
@@ -1387,17 +1430,21 @@ function AttachmentEightEditor({ activeCase, onChange }: { activeCase: Inspectio
               const file = event.target.files?.[0];
               if (!file) return;
               const photoNo = `基地-${String(sitePhotos.length + 1).padStart(2, "0")}`;
-              persistSitePhotos([
-                ...sitePhotos,
-                {
-                  id: crypto.randomUUID(),
-                  photoNo,
-                  imageUrl: URL.createObjectURL(file),
-                  caption: "基地現況",
-                  note: "",
-                  takenAt: new Date().toISOString(),
-                },
-              ]);
+              const photoId = crypto.randomUUID();
+              void uploadInspectionPhoto(activeCase.project.id, `attachment-eight/${photoId}`, file).then((uploaded) => {
+                persistSitePhotos([
+                  ...sitePhotos,
+                  {
+                    id: photoId,
+                    photoNo,
+                    imageUrl: uploaded.imageUrl,
+                    storagePath: uploaded.storagePath,
+                    caption: "基地現況",
+                    note: "",
+                    takenAt: new Date().toISOString(),
+                  },
+                ]);
+              });
               event.target.value = "";
             }}
           />

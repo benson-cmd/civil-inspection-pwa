@@ -48,9 +48,29 @@ export interface SitePhoto {
   id: string;
   photoNo: string;
   imageUrl: string;
+  storagePath?: string;
   caption: string;
   note: string;
   takenAt: string;
+}
+
+export interface LevelMeasurement {
+  id: string;
+  pointNo: string;
+  location: string;
+  initialElevation: string;
+  repeatElevation: string;
+  note: string;
+}
+
+export interface TiltMeasurement {
+  id: string;
+  lineNo: string;
+  location: string;
+  direction: "X向" | "Y向";
+  upperDistance: string;
+  lowerDistance: string;
+  floorHeight: string;
 }
 
 export interface Floor {
@@ -89,6 +109,7 @@ export interface PhotoRecord {
   id: string;
   pointId: string;
   imageUrl: string;
+  storagePath?: string;
   caption: string;
   takenAt: string;
 }
@@ -127,6 +148,8 @@ export interface InspectionCase {
   project: Project;
   target: Target;
   sitePhotos?: SitePhoto[];
+  levelMeasurements?: LevelMeasurement[];
+  tiltMeasurements?: TiltMeasurement[];
   attachmentSeven?: AttachmentSevenData;
   reportSections: ReportSection[];
   attachments: AttachmentSlot[];

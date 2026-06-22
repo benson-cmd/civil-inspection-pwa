@@ -22,9 +22,10 @@ interface InspectionFormProps {
   onChange: (point: InspectionPoint) => void;
   onDelete: (pointId: string) => void;
   onContinue: () => void;
+  onPhotoUpload: (point: InspectionPoint, file: File) => void;
 }
 
-export function InspectionForm({ point, onChange, onDelete, onContinue }: InspectionFormProps) {
+export function InspectionForm({ point, onChange, onDelete, onContinue, onPhotoUpload }: InspectionFormProps) {
   if (!point) {
     return (
       <aside className="grid min-h-72 place-items-center rounded-lg border border-dashed border-line bg-paper p-6 text-center text-muted">
@@ -77,17 +78,7 @@ export function InspectionForm({ point, onChange, onDelete, onContinue }: Inspec
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (!file) return;
-                const imageUrl = URL.createObjectURL(file);
-                onChange({
-                  ...point,
-                  photo: {
-                    id: crypto.randomUUID(),
-                    pointId: point.id,
-                    imageUrl,
-                    caption,
-                    takenAt: new Date().toISOString(),
-                  },
-                });
+                onPhotoUpload(point, file);
                 event.target.value = "";
               }}
             />

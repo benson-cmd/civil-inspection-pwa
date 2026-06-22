@@ -40,6 +40,9 @@ export function createCase(userId: string): InspectionCase {
     id: projectId,
     project,
     target,
+    sitePhotos: [],
+    levelMeasurements: [],
+    tiltMeasurements: [],
     attachmentSeven: {
       targets: [target],
       floorNamesByTarget: {

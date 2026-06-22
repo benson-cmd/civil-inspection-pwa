@@ -1,18 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import type { LevelMeasurement } from "@/types/inspection";
 
-type LevelMeasurementRow = {
-  id: string;
-  pointNo: string;
-  location: string;
-  initialElevation: string;
-  repeatElevation: string;
-  note: string;
-};
-
-function createRow(): LevelMeasurementRow {
+function createRow(): LevelMeasurement {
   return {
     id: crypto.randomUUID(),
     pointNo: "",
@@ -23,18 +14,22 @@ function createRow(): LevelMeasurementRow {
   };
 }
 
-export function AttachmentFiveEditor() {
-  const [rows, setRows] = useState<LevelMeasurementRow[]>([createRow()]);
+export function AttachmentFiveEditor({
+  rows,
+  onChange,
+}: {
+  rows: LevelMeasurement[];
+  onChange: (rows: LevelMeasurement[]) => void;
+}) {
+  const displayRows = rows.length ? rows : [createRow()];
 
-  function updateRow(rowId: string, patch: Partial<LevelMeasurementRow>) {
-    setRows((current) => current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  function updateRow(rowId: string, patch: Partial<LevelMeasurement>) {
+    onChange(displayRows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
   }
 
   function removeRow(rowId: string) {
-    setRows((current) => {
-      const next = current.filter((row) => row.id !== rowId);
-      return next.length ? next : [createRow()];
-    });
+    const next = displayRows.filter((row) => row.id !== rowId);
+    onChange(next.length ? next : [createRow()]);
   }
 
   return (
@@ -46,7 +41,7 @@ export function AttachmentFiveEditor() {
         </div>
         <button
           type="button"
-          onClick={() => setRows((current) => [...current, createRow()])}
+          onClick={() => onChange([...displayRows, createRow()])}
           className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-bold text-white"
         >
           <Plus size={18} /> 新增列
@@ -66,7 +61,7 @@ export function AttachmentFiveEditor() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {displayRows.map((row) => (
               <tr key={row.id} className="bg-white">
                 <td className="border border-line p-2">
                   <TableInput value={row.pointNo} onChange={(pointNo) => updateRow(row.id, { pointNo })} />

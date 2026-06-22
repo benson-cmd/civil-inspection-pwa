@@ -1,19 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import type { TiltMeasurement } from "@/types/inspection";
 
-type TiltMeasurementRow = {
-  id: string;
-  lineNo: string;
-  location: string;
-  direction: "X向" | "Y向";
-  upperDistance: string;
-  lowerDistance: string;
-  floorHeight: string;
-};
-
-function createRow(): TiltMeasurementRow {
+function createRow(): TiltMeasurement {
   return {
     id: crypto.randomUUID(),
     lineNo: "",
@@ -25,18 +15,22 @@ function createRow(): TiltMeasurementRow {
   };
 }
 
-export function AttachmentSixEditor() {
-  const [rows, setRows] = useState<TiltMeasurementRow[]>([createRow()]);
+export function AttachmentSixEditor({
+  rows,
+  onChange,
+}: {
+  rows: TiltMeasurement[];
+  onChange: (rows: TiltMeasurement[]) => void;
+}) {
+  const displayRows = rows.length ? rows : [createRow()];
 
-  function updateRow(rowId: string, patch: Partial<TiltMeasurementRow>) {
-    setRows((current) => current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  function updateRow(rowId: string, patch: Partial<TiltMeasurement>) {
+    onChange(displayRows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
   }
 
   function removeRow(rowId: string) {
-    setRows((current) => {
-      const next = current.filter((row) => row.id !== rowId);
-      return next.length ? next : [createRow()];
-    });
+    const next = displayRows.filter((row) => row.id !== rowId);
+    onChange(next.length ? next : [createRow()]);
   }
 
   return (
@@ -48,7 +42,7 @@ export function AttachmentSixEditor() {
         </div>
         <button
           type="button"
-          onClick={() => setRows((current) => [...current, createRow()])}
+          onClick={() => onChange([...displayRows, createRow()])}
           className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-bold text-white"
         >
           <Plus size={18} /> 新增列
@@ -70,7 +64,7 @@ export function AttachmentSixEditor() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {displayRows.map((row) => {
               const displacement = calculateDisplacement(row);
               const ratio = calculateRatio(displacement, row.floorHeight);
               const warning = ratio !== null && ratio < 200;
@@ -86,7 +80,7 @@ export function AttachmentSixEditor() {
                   <td className="border border-line p-2">
                     <select
                       value={row.direction}
-                      onChange={(event) => updateRow(row.id, { direction: event.target.value as TiltMeasurementRow["direction"] })}
+                      onChange={(event) => updateRow(row.id, { direction: event.target.value as TiltMeasurement["direction"] })}
                       className="min-h-10 w-full rounded-md border border-line bg-white px-2 outline-none"
                     >
                       <option value="X向">X向</option>
@@ -131,7 +125,7 @@ export function AttachmentSixEditor() {
   );
 }
 
-function calculateDisplacement(row: TiltMeasurementRow) {
+function calculateDisplacement(row: TiltMeasurement) {
   const upper = Number(row.upperDistance);
   const lower = Number(row.lowerDistance);
   if (!Number.isFinite(upper) || !Number.isFinite(lower) || row.upperDistance === "" || row.lowerDistance === "") return null;

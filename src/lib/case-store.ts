@@ -8,13 +8,16 @@ import type {
   FloorName,
   InspectionCase,
   InspectionPoint,
+  LevelMeasurement,
   NoEntryZone,
   PhotoRecord,
   Project,
   ProjectEngineer,
   ReportSection,
   ReportStatus,
+  SitePhoto,
   Target,
+  TiltMeasurement,
 } from "@/types/inspection";
 
 type ProjectRow = {
@@ -39,6 +42,9 @@ type ProjectRow = {
   ci_targets?: TargetRow[];
   ci_report_sections?: ReportSectionRow[];
   ci_attachments?: AttachmentRow[];
+  ci_site_photos?: SitePhotoRow[];
+  ci_level_measurements?: LevelMeasurementRow[];
+  ci_tilt_measurements?: TiltMeasurementRow[];
 };
 
 type TargetRow = {
@@ -82,8 +88,41 @@ type PhotoRow = {
   id: string;
   point_id: string;
   image_url: string;
+  storage_path: string | null;
   caption: string | null;
   taken_at: string;
+};
+
+type SitePhotoRow = {
+  id: string;
+  project_id: string;
+  photo_no: string;
+  image_url: string;
+  storage_path: string | null;
+  caption: string | null;
+  note: string | null;
+  taken_at: string;
+};
+
+type LevelMeasurementRow = {
+  id: string;
+  point_no: string | null;
+  location: string | null;
+  initial_elevation: number | string | null;
+  repeat_elevation: number | string | null;
+  note: string | null;
+  row_order: number | null;
+};
+
+type TiltMeasurementRow = {
+  id: string;
+  line_no: string | null;
+  location: string | null;
+  direction: TiltMeasurement["direction"] | null;
+  upper_distance: number | string | null;
+  lower_distance: number | string | null;
+  floor_height: number | string | null;
+  row_order: number | null;
 };
 
 type ReportSectionRow = {
@@ -141,14 +180,23 @@ export async function ensureProfile(supabase: SupabaseClient, user: AppUser) {
 }
 
 export async function fetchInspectionCases(supabase: SupabaseClient, userId: string): Promise<InspectionCase[]> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("ci_projects")
-    .select("*, ci_targets(*, ci_floors(*, ci_inspection_points(*, ci_photos(*)))), ci_report_sections(*), ci_attachments(*)")
+    .select("*, ci_targets(*, ci_floors(*, ci_inspection_points(*, ci_photos(*)))), ci_report_sections(*), ci_attachments(*), ci_site_photos(*), ci_level_measurements(*), ci_tilt_measurements(*)")
     .order("updated_at", { ascending: false });
+
+  if (error && isMissingTableError(error)) {
+    const fallback = await supabase
+      .from("ci_projects")
+      .select("*, ci_targets(*, ci_floors(*, ci_inspection_points(*, ci_photos(*)))), ci_report_sections(*), ci_attachments(*), ci_site_photos(*)")
+      .order("updated_at", { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
 
-  return ((data ?? []) as ProjectRow[]).map((row) => projectRowToCase(row, userId));
+  return Promise.all(((data ?? []) as ProjectRow[]).map((row) => projectRowToCase(supabase, row, userId)));
 }
 
 export async function saveInspectionCase(supabase: SupabaseClient, inspectionCase: InspectionCase) {
@@ -248,6 +296,10 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     .upsert(attachmentRows, { onConflict: "project_id,attachment_no" });
 
   if (attachmentsError) throw attachmentsError;
+
+  await saveSitePhotos(supabase, inspectionCase);
+  await saveLevelMeasurements(supabase, inspectionCase);
+  await saveTiltMeasurements(supabase, inspectionCase);
 }
 
 async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase: InspectionCase) {
@@ -329,6 +381,7 @@ async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase:
       id: point.photo?.id,
       point_id: point.id,
       image_url: point.photo?.imageUrl ?? "",
+      storage_path: point.photo?.storagePath ?? null,
       caption: point.photo?.caption ?? "",
       taken_at: point.photo?.takenAt ?? new Date().toISOString(),
     }));
@@ -339,7 +392,103 @@ async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase:
   }
 }
 
-function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
+async function saveSitePhotos(supabase: SupabaseClient, inspectionCase: InspectionCase) {
+  const photos = inspectionCase.sitePhotos ?? [];
+  const rows = photos.map((photo) => ({
+    id: photo.id,
+    project_id: inspectionCase.project.id,
+    photo_no: photo.photoNo,
+    image_url: photo.imageUrl,
+    storage_path: photo.storagePath ?? null,
+    caption: photo.caption,
+    note: photo.note,
+    taken_at: photo.takenAt,
+  }));
+
+  if (rows.length) {
+    const { error } = await supabase.from("ci_site_photos").upsert(rows, { onConflict: "id" });
+    if (error) throw error;
+  }
+
+  const { data: existingRows } = await supabase.from("ci_site_photos").select("id").eq("project_id", inspectionCase.project.id);
+  const currentIds = photos.map((photo) => photo.id);
+  const staleIds = ((existingRows ?? []) as Array<{ id: string }>).map((row) => row.id).filter((id) => !currentIds.includes(id));
+  if (staleIds.length) {
+    const { error } = await supabase.from("ci_site_photos").delete().in("id", staleIds);
+    if (error) throw error;
+  }
+}
+
+async function saveLevelMeasurements(supabase: SupabaseClient, inspectionCase: InspectionCase) {
+  const measurements = inspectionCase.levelMeasurements ?? [];
+  const rows = measurements.map((row, index) => ({
+    id: row.id,
+    project_id: inspectionCase.project.id,
+    row_order: index + 1,
+    point_no: row.pointNo,
+    location: row.location,
+    initial_elevation: row.initialElevation === "" ? null : Number(row.initialElevation),
+    repeat_elevation: row.repeatElevation === "" ? null : Number(row.repeatElevation),
+    note: row.note,
+  }));
+
+  if (rows.length) {
+    const { error } = await supabase.from("ci_level_measurements").upsert(rows, { onConflict: "id" });
+    if (error) {
+      if (isMissingTableError(error)) return;
+      throw error;
+    }
+  }
+
+  const { data: existingRows, error: existingRowsError } = await supabase.from("ci_level_measurements").select("id").eq("project_id", inspectionCase.project.id);
+  if (existingRowsError) {
+    if (isMissingTableError(existingRowsError)) return;
+    throw existingRowsError;
+  }
+  const currentIds = measurements.map((row) => row.id);
+  const staleIds = ((existingRows ?? []) as Array<{ id: string }>).map((row) => row.id).filter((id) => !currentIds.includes(id));
+  if (staleIds.length) {
+    const { error } = await supabase.from("ci_level_measurements").delete().in("id", staleIds);
+    if (error) throw error;
+  }
+}
+
+async function saveTiltMeasurements(supabase: SupabaseClient, inspectionCase: InspectionCase) {
+  const measurements = inspectionCase.tiltMeasurements ?? [];
+  const rows = measurements.map((row, index) => ({
+    id: row.id,
+    project_id: inspectionCase.project.id,
+    row_order: index + 1,
+    line_no: row.lineNo,
+    location: row.location,
+    direction: row.direction,
+    upper_distance: row.upperDistance === "" ? null : Number(row.upperDistance),
+    lower_distance: row.lowerDistance === "" ? null : Number(row.lowerDistance),
+    floor_height: row.floorHeight === "" ? null : Number(row.floorHeight),
+  }));
+
+  if (rows.length) {
+    const { error } = await supabase.from("ci_tilt_measurements").upsert(rows, { onConflict: "id" });
+    if (error) {
+      if (isMissingTableError(error)) return;
+      throw error;
+    }
+  }
+
+  const { data: existingRows, error: existingRowsError } = await supabase.from("ci_tilt_measurements").select("id").eq("project_id", inspectionCase.project.id);
+  if (existingRowsError) {
+    if (isMissingTableError(existingRowsError)) return;
+    throw existingRowsError;
+  }
+  const currentIds = measurements.map((row) => row.id);
+  const staleIds = ((existingRows ?? []) as Array<{ id: string }>).map((row) => row.id).filter((id) => !currentIds.includes(id));
+  if (staleIds.length) {
+    const { error } = await supabase.from("ci_tilt_measurements").delete().in("id", staleIds);
+    if (error) throw error;
+  }
+}
+
+async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userId: string): Promise<InspectionCase> {
   const project: Project = {
     id: row.id,
     caseNo: row.case_no,
@@ -386,7 +535,7 @@ function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
         note: "",
       };
 
-  const attachmentSeven = buildAttachmentSevenData(row, target);
+  const attachmentSeven = await buildAttachmentSevenData(supabase, row, target);
   const reportSections = mergeReportSections(project, row.ci_report_sections ?? []);
   const attachments = mergeAttachments(row.ci_attachments ?? []);
 
@@ -394,6 +543,13 @@ function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
     id: row.id,
     project,
     target,
+    sitePhotos: await Promise.all((row.ci_site_photos ?? []).map((photoRow) => sitePhotoRowToPhoto(supabase, photoRow))),
+    levelMeasurements: (row.ci_level_measurements ?? [])
+      .sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0))
+      .map(levelMeasurementRowToMeasurement),
+    tiltMeasurements: (row.ci_tilt_measurements ?? [])
+      .sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0))
+      .map(tiltMeasurementRowToMeasurement),
     attachmentSeven,
     reportSections,
     attachments,
@@ -402,7 +558,7 @@ function projectRowToCase(row: ProjectRow, userId: string): InspectionCase {
   };
 }
 
-function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): AttachmentSevenData {
+async function buildAttachmentSevenData(supabase: SupabaseClient, row: ProjectRow, fallbackTarget: Target): Promise<AttachmentSevenData> {
   const targets = row.ci_targets?.length
     ? row.ci_targets.map(targetRowToTarget)
     : [fallbackTarget];
@@ -423,7 +579,7 @@ function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): Atta
     noEntryZonesByTargetFloor[floor.target_id][floor.floor_name] = Array.isArray(floor.no_entry_zones) ? floor.no_entry_zones : [];
 
     for (const point of floor.ci_inspection_points ?? []) {
-      points.push(inspectionPointRowToPoint(point));
+      points.push(await inspectionPointRowToPoint(supabase, point));
     }
   }
 
@@ -452,7 +608,7 @@ function targetRowToTarget(row: TargetRow): Target {
   };
 }
 
-function inspectionPointRowToPoint(row: InspectionPointRow): InspectionPoint {
+async function inspectionPointRowToPoint(supabase: SupabaseClient, row: InspectionPointRow): Promise<InspectionPoint> {
   const photoRow = row.ci_photos?.[0];
   return {
     id: row.id,
@@ -465,19 +621,64 @@ function inspectionPointRowToPoint(row: InspectionPointRow): InspectionPoint {
     conditionType: row.condition_type ?? [],
     crackWidthMm: row.crack_width_mm == null ? undefined : Number(row.crack_width_mm),
     note: row.note ?? "",
-    photo: photoRow ? photoRowToRecord(photoRow) : undefined,
+    photo: photoRow ? await photoRowToRecord(supabase, photoRow) : undefined,
     createdAt: row.created_at,
   };
 }
 
-function photoRowToRecord(row: PhotoRow): PhotoRecord {
+async function photoRowToRecord(supabase: SupabaseClient, row: PhotoRow): Promise<PhotoRecord> {
   return {
     id: row.id,
     pointId: row.point_id,
-    imageUrl: row.image_url,
+    imageUrl: await signedStorageUrl(supabase, row.storage_path, row.image_url),
+    storagePath: row.storage_path ?? undefined,
     caption: row.caption ?? "",
     takenAt: row.taken_at,
   };
+}
+
+async function sitePhotoRowToPhoto(supabase: SupabaseClient, row: SitePhotoRow): Promise<SitePhoto> {
+  return {
+    id: row.id,
+    photoNo: row.photo_no,
+    imageUrl: await signedStorageUrl(supabase, row.storage_path, row.image_url),
+    storagePath: row.storage_path ?? undefined,
+    caption: row.caption ?? "",
+    note: row.note ?? "",
+    takenAt: row.taken_at,
+  };
+}
+
+function levelMeasurementRowToMeasurement(row: LevelMeasurementRow): LevelMeasurement {
+  return {
+    id: row.id,
+    pointNo: row.point_no ?? "",
+    location: row.location ?? "",
+    initialElevation: row.initial_elevation == null ? "" : String(row.initial_elevation),
+    repeatElevation: row.repeat_elevation == null ? "" : String(row.repeat_elevation),
+    note: row.note ?? "",
+  };
+}
+
+function tiltMeasurementRowToMeasurement(row: TiltMeasurementRow): TiltMeasurement {
+  return {
+    id: row.id,
+    lineNo: row.line_no ?? "",
+    location: row.location ?? "",
+    direction: row.direction ?? "X向",
+    upperDistance: row.upper_distance == null ? "" : String(row.upper_distance),
+    lowerDistance: row.lower_distance == null ? "" : String(row.lower_distance),
+    floorHeight: row.floor_height == null ? "" : String(row.floor_height),
+  };
+}
+
+async function signedStorageUrl(supabase: SupabaseClient, storagePath: string | null, fallbackUrl: string) {
+  if (!storagePath) return fallbackUrl;
+  const { data, error } = await supabase.storage
+    .from("ci-inspection-photos")
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+  if (error) return fallbackUrl;
+  return data.signedUrl;
 }
 
 function mergeReportSections(project: Project, rows: ReportSectionRow[]): ReportSection[] {
@@ -532,4 +733,8 @@ function parseEngineers(value: string | null): ProjectEngineer[] {
 function normalizeReportStatus(value: string | null): ReportStatus {
   if (value === "審閱中" || value === "待補件" || value === "完稿" || value === "已歸檔") return value;
   return "草稿";
+}
+
+function isMissingTableError(error: { code?: string; message?: string }) {
+  return error.code === "42P01" || String(error.message ?? "").includes("does not exist");
 }
