@@ -37,6 +37,7 @@ import type {
 } from "@/types/inspection";
 
 type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
+type AppView = "workspace" | "users";
 
 const floorNames: FloorName[] = ["1F", "2F", "3F", "RF"];
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
@@ -52,7 +53,7 @@ export default function HomePage() {
   const [cases, setCases] = useState<InspectionCase[]>(() => [createCase("user-admin")]);
   const [activeCaseId, setActiveCaseId] = useState(cases[0]?.id);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("basic");
-  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [activeView, setActiveView] = useState<AppView>("workspace");
   const [managedUsers, setManagedUsers] = useState<AppUser[]>([]);
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
@@ -137,6 +138,7 @@ export default function HomePage() {
     setCases((current) => [nextCase, ...current]);
     setActiveCaseId(nextCase.id);
     setActiveTab("basic");
+    setActiveView("workspace");
   }
 
   if (authLoading) {
@@ -174,19 +176,19 @@ export default function HomePage() {
               </div>
             </div>
             <div className="p-6 md:p-8">
-            {supabaseEnabled ? (
-              <button
-                type="button"
-                onClick={signInWithGoogle}
-                className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
-              >
-                <LogIn size={20} /> 使用 Google 帳戶登入
-              </button>
-            ) : (
-              <div className="mt-6 rounded-md border border-line bg-[#E6FBF7] p-4 text-sm text-accent">
-                尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
-              </div>
-            )}
+              {supabaseEnabled ? (
+                <button
+                  type="button"
+                  onClick={signInWithGoogle}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
+                >
+                  <LogIn size={20} /> 使用 Google 帳戶登入
+                </button>
+              ) : (
+                <div className="mt-6 rounded-md border border-line bg-[#E6FBF7] p-4 text-sm text-accent">
+                  尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -203,8 +205,12 @@ export default function HomePage() {
       <PwaRegister />
       <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#12365f] bg-[#0A2342] p-4 text-white shadow-sm">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">REPORT WORKSPACE</p>
-          <h1 className="text-2xl font-black text-white md:text-3xl">現況鑑定報告系統</h1>
+          <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">
+            {activeView === "users" ? "ADMIN CONSOLE" : "REPORT WORKSPACE"}
+          </p>
+          <h1 className="text-2xl font-black text-white md:text-3xl">
+            {activeView === "users" ? "使用者管理" : "現況鑑定報告系統"}
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white">
@@ -213,12 +219,12 @@ export default function HomePage() {
           {currentUser.role === "admin" ? (
             <button
               type="button"
-              onClick={() => setShowUserManagement((current) => !current)}
+              onClick={() => setActiveView((current) => (current === "users" ? "workspace" : "users"))}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-                showUserManagement ? "border-[#00CBA9] bg-[#00CBA9] text-[#051223]" : "border-white/20 bg-white/10 text-white"
+                activeView === "users" ? "border-[#00CBA9] bg-[#00CBA9] text-[#051223]" : "border-white/20 bg-white/10 text-white"
               }`}
             >
-              <Users size={18} /> 使用者管理
+              <Users size={18} /> {activeView === "users" ? "報告工作台" : "使用者管理"}
             </button>
           ) : null}
           <button
@@ -231,69 +237,72 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="rounded-lg border border-line bg-paper p-3 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="font-bold">案件列表</h2>
-            <button
-              type="button"
-              onClick={addCase}
-              className="inline-flex min-h-10 items-center gap-1 rounded-md bg-accent px-3 text-sm font-bold text-white"
-            >
-              <Plus size={16} /> 新增
-            </button>
-          </div>
-          <div className="grid gap-2">
-            {cases.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveCaseId(item.id);
-                  setActiveTab("basic");
-                }}
-                className={`rounded-md border p-3 text-left ${
-                  item.id === activeCase.id ? "border-accent bg-[#DDF7F1]" : "border-line bg-white"
-                }`}
-              >
-                <span className="block font-bold">{item.project.caseNo}</span>
-                <span className="block text-sm text-muted">{item.project.projectName}</span>
-                <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        <section className="min-w-0">
-          {showUserManagement && currentUser.role === "admin" ? (
-            <UserManagementPanel users={managedUsers} onChange={setManagedUsers} currentUserId={currentUser.id} />
-          ) : null}
-          <CaseHeader activeCase={activeCase} onChange={updateCase} />
-          <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-sm">
-            {workspaceTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`min-h-11 rounded-md px-3 text-sm font-bold ${
-                  activeTab === tab.id ? "bg-accent text-white" : "bg-white"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-
-          {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
-          {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
-          {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
-          {activeTab === "attachment5" ? <AttachmentPlaceholder no={5} title="水準測量" description="附件五將建立測量成果資料輸入、PDF 上傳與報告合併功能。" /> : null}
-          {activeTab === "attachment6" ? <AttachmentPlaceholder no={6} title="傾斜率測量" description="附件六將建立傾斜率測量成果資料輸入、照片或 PDF 上傳與報告合併功能。" /> : null}
-          {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
-          {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
-          {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
+      {activeView === "users" && currentUser.role === "admin" ? (
+        <section className="mx-auto max-w-7xl">
+          <UserManagementPanel users={managedUsers} onChange={setManagedUsers} currentUserId={currentUser.id} />
         </section>
-      </section>
+      ) : (
+        <section className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="rounded-lg border border-line bg-paper p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-bold">案件列表</h2>
+              <button
+                type="button"
+                onClick={addCase}
+                className="inline-flex min-h-10 items-center gap-1 rounded-md bg-accent px-3 text-sm font-bold text-white"
+              >
+                <Plus size={16} /> 新增
+              </button>
+            </div>
+            <div className="grid gap-2">
+              {cases.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveCaseId(item.id);
+                    setActiveTab("basic");
+                  }}
+                  className={`rounded-md border p-3 text-left ${
+                    item.id === activeCase.id ? "border-accent bg-[#DDF7F1]" : "border-line bg-white"
+                  }`}
+                >
+                  <span className="block font-bold">{item.project.caseNo}</span>
+                  <span className="block text-sm text-muted">{item.project.projectName}</span>
+                  <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="min-w-0">
+            <CaseHeader activeCase={activeCase} onChange={updateCase} />
+            <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-sm">
+              {workspaceTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`min-h-11 rounded-md px-3 text-sm font-bold ${
+                    activeTab === tab.id ? "bg-accent text-white" : "bg-white"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+
+            {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "attachment5" ? <AttachmentPlaceholder no={5} title="水準測量" description="附件五將建立測量成果資料輸入、PDF 上傳與報告合併功能。" /> : null}
+            {activeTab === "attachment6" ? <AttachmentPlaceholder no={6} title="傾斜率測量" description="附件六將建立傾斜率測量成果資料輸入、照片或 PDF 上傳與報告合併功能。" /> : null}
+            {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
+          </section>
+        </section>
+      )}
     </main>
   );
 }
