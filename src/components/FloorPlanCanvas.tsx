@@ -191,7 +191,7 @@ export function FloorPlanCanvas({
   }
 
   return (
-    <section className="rounded-lg border border-line bg-paper p-3 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold">平面圖與照片位置</h2>
@@ -220,7 +220,7 @@ export function FloorPlanCanvas({
             type="button"
             onClick={() => setSnapLine((current) => !current)}
             className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              snapLine ? "border-accent bg-[#DDF7F1] text-accent" : "border-line bg-white"
+              snapLine ? "border-accent bg-[#f5f5f4] text-accent" : "border-line bg-white"
             }`}
           >
             <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
@@ -293,7 +293,7 @@ export function FloorPlanCanvas({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${viewBox.width} ${viewBox.height}`}
-        className="aspect-[90/62] w-full rounded-md border border-line bg-[#F8FAFC]"
+        className="aspect-[90/62] w-full rounded-md border border-line bg-[#fafaf6]"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -303,7 +303,7 @@ export function FloorPlanCanvas({
       >
         <defs>
           <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
-            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#D8E1EA" strokeWidth="1" />
+            <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#e7e5e4" strokeWidth="1" />
           </pattern>
         </defs>
         <rect width={viewBox.width} height={viewBox.height} fill="url(#grid)" />

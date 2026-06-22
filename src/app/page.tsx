@@ -192,21 +192,21 @@ export default function HomePage() {
       <main className="min-h-screen bg-background px-4 py-6 text-foreground">
         <PwaRegister />
         <section className="mx-auto grid min-h-[calc(100vh-48px)] max-w-3xl place-items-center">
-          <div className="w-full overflow-hidden rounded-lg border border-line bg-paper shadow-[0_18px_45px_rgba(10,35,66,0.12)]">
-            <div className="grid gap-5 border-b border-[#12365f] bg-[#0A2342] p-6 text-white md:grid-cols-[1fr_180px] md:p-8">
+          <div className="w-full overflow-hidden rounded-lg border border-line bg-paper shadow-[0_18px_45px_rgba(28,25,23,0.10)]">
+            <div className="grid gap-5 border-b border-[#292524] bg-[#1c1917] p-6 text-white md:grid-cols-[1fr_180px] md:p-8">
               <div>
-                <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">CIVIL INSPECTION REPORT</p>
+                <p className="text-sm font-semibold tracking-[0.2em] text-stone-300">CIVIL INSPECTION REPORT</p>
                 <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
               </div>
-              <div className="hidden h-32 rounded-lg border border-white/15 bg-white/10 p-4 md:block">
-                <div className="mb-3 flex items-center justify-between text-[#00CBA9]">
-                  <Building2 size={28} />
-                  <span className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-white/72">A4</span>
+              <div className="hidden h-32 rounded-md border border-white/15 bg-white/10 p-4 md:block">
+                <div className="mb-3 flex items-center justify-between text-stone-300">
+                  <FileText size={28} />
+                  <span className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-white/72 mono-data">A4</span>
                 </div>
                 <svg viewBox="0 0 180 88" className="h-[72px] w-full" aria-hidden="true">
-                  <path d="M8 72 H172 M24 72 V22 H78 V72 M78 44 H126 V72 M126 30 H158 V72" fill="none" stroke="#D8E1EA" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M18 18 L162 18 M18 34 L58 34 M94 56 L150 56" fill="none" stroke="#00CBA9" strokeWidth="2" strokeLinecap="round" strokeDasharray="6 7" />
-                  <circle cx="40" cy="48" r="7" fill="#00CBA9" opacity="0.9" />
+                  <rect x="24" y="8" width="132" height="72" rx="4" fill="none" stroke="#d6d3d1" strokeWidth="3" />
+                  <path d="M44 28 H136 M44 43 H136 M44 58 H104" fill="none" stroke="#fafaf6" strokeWidth="3" strokeLinecap="round" />
+                  <path d="M122 61 L136 70 L154 45" fill="none" stroke="#d6d3d1" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
             </div>
@@ -220,7 +220,7 @@ export default function HomePage() {
                   <LogIn size={20} /> 使用 Google 帳戶登入
                 </button>
               ) : (
-                <div className="mt-6 rounded-md border border-line bg-[#E6FBF7] p-4 text-sm text-accent">
+                <div className="mt-6 rounded-md border border-line bg-[#f5f5f4] p-4 text-sm text-accent">
                   尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
                 </div>
               )}
@@ -238,9 +238,9 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-background px-4 py-4 text-foreground md:px-6 lg:px-8">
       <PwaRegister />
-      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#12365f] bg-[#0A2342] p-4 text-white shadow-sm">
+      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#292524] bg-[#1c1917] p-4 text-white shadow-sm">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-[#00CBA9]">
+          <p className="text-sm font-semibold tracking-[0.2em] text-stone-300">
             {activeView === "users" ? "ADMIN CONSOLE" : "REPORT WORKSPACE"}
           </p>
           <h1 className="text-2xl font-black text-white md:text-3xl">
@@ -256,7 +256,7 @@ export default function HomePage() {
               type="button"
               onClick={() => setActiveView((current) => (current === "users" ? "workspace" : "users"))}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-                activeView === "users" ? "border-[#00CBA9] bg-[#00CBA9] text-[#051223]" : "border-white/20 bg-white/10 text-white"
+                activeView === "users" ? "border-stone-200 bg-stone-200 text-stone-950" : "border-white/20 bg-white/10 text-white"
               }`}
             >
               <Users size={18} /> {activeView === "users" ? "報告工作台" : "使用者管理"}
@@ -278,7 +278,7 @@ export default function HomePage() {
         </section>
       ) : (
         <section className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-lg border border-line bg-paper p-3 shadow-sm">
+          <aside className="workspace-panel rounded-lg border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="font-bold">案件列表</h2>
               <button
@@ -299,10 +299,10 @@ export default function HomePage() {
                     setActiveTab("basic");
                   }}
                   className={`rounded-md border p-3 text-left ${
-                    item.id === activeCase.id ? "border-accent bg-[#DDF7F1]" : "border-line bg-white"
+                    item.id === activeCase.id ? "border-accent bg-[#f5f5f4]" : "border-line bg-white"
                   }`}
                 >
-                  <span className="block font-bold">{item.project.caseNo}</span>
+                  <span className="mono-data block font-bold">{item.project.caseNo}</span>
                   <span className="block text-sm text-muted">{item.project.projectName}</span>
                   <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
                 </button>
@@ -312,7 +312,7 @@ export default function HomePage() {
 
           <section className="min-w-0">
             <CaseHeader activeCase={activeCase} onChange={updateCase} />
-            <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-sm">
+            <nav className="workspace-panel mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
               {workspaceTabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -442,7 +442,7 @@ function UserManagementPanel({
   }
 
   return (
-    <section className="mb-4 rounded-lg border border-line bg-paper p-4 shadow-sm">
+    <section className="workspace-panel mb-4 rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <Users size={18} /> 使用者管理
@@ -466,7 +466,7 @@ function UserManagementPanel({
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
-            <tr className="bg-[#E8EDF5] text-left">
+            <tr className="bg-[#e7e5e4] text-left">
               <th className="border border-line p-2">使用者</th>
               <th className="border border-line p-2">Email</th>
               <th className="border border-line p-2">角色</th>
@@ -519,7 +519,7 @@ function UserManagementPanel({
 function AttachmentPlaceholder({ no, title, description }: { no: number; title: string; description: string }) {
   return (
     <Panel title={`附件${toChineseNumber(no)} ${title}`} icon={<FileText size={18} />}>
-      <div className="rounded-md border border-dashed border-accent bg-[#E6FBF7] p-4">
+      <div className="rounded-md border border-dashed border-accent bg-[#f5f5f4] p-4">
         <div className="text-base font-bold text-accent">待開發</div>
         <p className="mt-2 text-sm text-muted">{description}</p>
       </div>
@@ -541,12 +541,12 @@ function CaseHeader({ activeCase, onChange }: { activeCase: InspectionCase; onCh
   }
 
   return (
-    <section className="mb-4 rounded-lg border border-line bg-paper p-4 shadow-sm">
+    <section className="workspace-panel mb-4 rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-muted">目前案件</p>
           <h2 className="text-2xl font-black">{activeCase.project.projectName}</h2>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mono-data mt-1 text-sm text-muted">
             {activeCase.project.caseNo} / {activeCase.project.applicantName} / {activeCase.project.inspectionDate}
           </p>
         </div>
@@ -770,7 +770,7 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
               {slot.fileName ? <div className="mt-1 text-sm text-accent">已選擇：{slot.fileName}</div> : null}
             </div>
             {slot.mode === "upload" ? (
-              <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-sm font-semibold text-accent">
+              <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-sm font-semibold text-accent">
                 上傳 PDF
                 <input
                   type="file"
@@ -984,7 +984,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
 
   return (
     <div className="grid gap-4">
-      <section className="rounded-lg border border-line bg-paper p-3 shadow-sm">
+      <section className="workspace-panel rounded-lg border border-line bg-paper p-3 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">標的物之坐落</h2>
           <button
@@ -1036,7 +1036,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
         <Panel title="地坪" icon={<Building2 size={18} />}>
           <OptionGroup value={target.floorFinish} options={floorFinishOptions} onChange={(floorFinish) => updateTarget({ floorFinish })} />
         </Panel>
-        <section className="rounded-lg border border-line bg-paper p-4 shadow-sm lg:col-span-3">
+        <section className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)] lg:col-span-3">
           <h2 className="mb-3 text-lg font-bold">★會勘狀況</h2>
           <div className="grid gap-2 md:grid-cols-4">
             {surveyStatusOptions.map((option) => (
@@ -1126,7 +1126,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-[#E8EDF5] text-left">
+                  <tr className="bg-[#e7e5e4] text-left">
                     <th className="border border-line p-2">照片編號</th>
                     <th className="border border-line p-2">樓層</th>
                     <th className="border border-line p-2">位置</th>
@@ -1141,15 +1141,15 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                     <tr
                       key={point.id}
                       onClick={() => setActivePointId(point.id)}
-                      className={`cursor-pointer ${point.id === activePointId ? "bg-[#DDF7F1]" : "bg-white"}`}
+                      className={`cursor-pointer ${point.id === activePointId ? "bg-[#f5f5f4]" : "bg-white"}`}
                     >
-                      <td className="border border-line p-2 font-bold text-accent">#{point.photoNo}</td>
-                      <td className="border border-line p-2">{activeFloorName}</td>
+                      <td className="mono-data border border-line p-2 font-bold text-accent">#{point.photoNo}</td>
+                      <td className="mono-data border border-line p-2">{activeFloorName}</td>
                       <td className="border border-line p-2">{point.componentType.join("、")}</td>
                       <td className="border border-line p-2">{point.conditionType.join("、")}</td>
-                      <td className="border border-line p-2">{point.crackWidthMm ?? ""}</td>
+                      <td className="mono-data border border-line p-2">{point.crackWidthMm ?? ""}</td>
                       <td className="border border-line p-2">
-                        <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-xs font-semibold text-accent">
+                        <label className="relative inline-flex min-h-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-xs font-semibold text-accent">
                           {point.photo?.imageUrl ? "更換照片" : "上傳照片"}
                           <input
                             type="file"
@@ -1187,7 +1187,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
         />
       </section>
 
-      <section className="rounded-lg border border-line bg-paper p-4 shadow-sm">
+      <section className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">附件七匯出預覽</h2>
@@ -1206,13 +1206,13 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
   const [sitePhotos, setSitePhotos] = useState<SitePhoto[]>([]);
 
   return (
-    <section className="rounded-lg border border-line bg-paper p-4 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold">附件八 基地現況照片</h2>
           <p className="text-sm text-muted">用於基地外觀、施工基地周邊、道路或鄰地現況照片。</p>
         </div>
-        <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-accent bg-[#E6FBF7] px-3 text-sm font-semibold text-accent">
+        <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-sm font-semibold text-accent">
           <ImagePlus size={18} /> 新增基地照片
           <input
             type="file"
@@ -1292,7 +1292,7 @@ function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-line bg-paper p-4 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
         {icon}
         {title}
@@ -1317,16 +1317,22 @@ function TextField({
   icon?: ReactNode;
   className?: string;
 }) {
+  const hint = fieldHint(label);
+  const useMono = shouldUseMonoField(label, type);
+
   return (
     <label className={`block ${className}`}>
-      <span className="mb-1 block text-sm font-semibold text-muted">{label}</span>
+      <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+        {label}
+        {hint ? <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">{hint}</span> : null}
+      </span>
       <span className="flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3">
         {icon}
         <input
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full bg-transparent outline-none"
+          className={`w-full bg-transparent outline-none ${useMono ? "mono-data" : ""}`}
         />
       </span>
     </label>
@@ -1344,9 +1350,14 @@ function SelectField({
   options: string[];
   onChange: (value: string) => void;
 }) {
+  const hint = fieldHint(label);
+
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-muted">{label}</span>
+      <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+        {label}
+        {hint ? <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">{hint}</span> : null}
+      </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1391,9 +1402,48 @@ function OptionGroup({
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-line bg-white p-3">
-      <div className="text-xs font-semibold text-muted">{label}</div>
-      <div className="mt-1 font-bold">{value || "尚未填寫"}</div>
+      <div className="flex items-baseline gap-2 text-xs font-semibold text-muted">
+        {label}
+        {fieldHint(label) ? <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">{fieldHint(label)}</span> : null}
+      </div>
+      <div className={`mt-1 font-bold ${shouldUseMonoField(label) ? "mono-data" : ""}`}>{value || "尚未填寫"}</div>
     </div>
+  );
+}
+
+function fieldHint(label: string) {
+  const hints: Record<string, string> = {
+    案件編號: "Case No.",
+    案件名稱: "Project",
+    申請單位: "Applicant",
+    連絡人: "Contact",
+    連絡地址: "Address",
+    連絡電話: "Phone",
+    申請日期: "Apply Date",
+    公會收文日期: "Received",
+    收文號: "Doc No.",
+    鑑定類型: "Type",
+    完稿日期: "Final Date",
+    標的物地址: "Location",
+    標的物之坐落: "Location",
+    用途: "Usage",
+    備註: "Note",
+    鑑定技師: "Engineer",
+    會員編號: "Member No.",
+    申請人: "Applicant",
+  };
+
+  return hints[label] ?? "";
+}
+
+function shouldUseMonoField(label: string, type = "text") {
+  return (
+    type === "date" ||
+    label.includes("編號") ||
+    label.includes("案號") ||
+    label.includes("日期") ||
+    label.includes("電話") ||
+    label.includes("收文")
   );
 }
 

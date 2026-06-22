@@ -43,11 +43,11 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
   }
 
   return (
-    <aside className="rounded-lg border border-line bg-paper p-4 shadow-sm">
+    <aside className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="text-sm text-muted">目前照片</div>
-          <h2 className="text-2xl font-black text-accent">#{point.photoNo}</h2>
+          <h2 className="mono-data text-2xl font-black text-accent">#{point.photoNo}</h2>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md bg-ink px-3 text-sm font-semibold text-white">
@@ -84,7 +84,7 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
           </button>
         </div>
       </div>
-      <p className="mb-4 rounded-md bg-[#E6FBF7] p-3 text-sm text-muted">
+      <p className="mb-4 rounded-md bg-[#f5f5f4] p-3 text-sm text-muted">
         上傳方式：按「拍照/上傳」後，iPad Safari 會跳出「拍照」或「照片圖庫」；目前先暫存在瀏覽器預覽，接 Supabase Storage 後才會永久保存。
       </p>
 

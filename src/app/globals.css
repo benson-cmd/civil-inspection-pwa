@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f7fa;
-  --foreground: #0a2342;
-  --muted: #64748b;
-  --paper: #ffffff;
-  --line: #d8e1ea;
-  --accent: #008771;
-  --accent-dark: #006555;
-  --ink: #051223;
-  --surface-soft: #eef5fb;
-  --surface-accent: #e6fbf7;
+  --background: #fafaf9;
+  --foreground: #1c1917;
+  --muted: #78716c;
+  --paper: #fffefa;
+  --line: rgba(214, 211, 209, 0.72);
+  --accent: #44403c;
+  --accent-dark: #1c1917;
+  --ink: #1c1917;
+  --surface-soft: #f7f3ed;
+  --surface-accent: #f5f5f4;
 }
 
 @theme inline {
@@ -42,8 +42,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 16% 0%, rgba(0, 203, 169, 0.1), transparent 26rem),
-    linear-gradient(180deg, #f8fafc 0%, var(--background) 42rem);
+    linear-gradient(180deg, #fafaf6 0%, var(--background) 28rem),
+    var(--background);
   font-family: var(--font-sans);
 }
 
@@ -60,7 +60,59 @@ input,
 select,
 textarea {
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(0, 203, 169, 0.18);
+  -webkit-tap-highlight-color: rgba(68, 64, 60, 0.14);
+}
+
+button,
+input,
+select,
+textarea,
+section,
+aside,
+article,
+nav {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.workspace-panel {
+  animation: panel-in 220ms ease-out both;
+}
+
+.mono-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 canvas {
