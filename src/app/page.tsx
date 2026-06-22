@@ -612,7 +612,14 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
           <TextField label="案件名稱" value={project.projectName} onChange={(projectName) => updateProject({ projectName })} />
           <TextField label="申請單位" value={project.applicantName} onChange={(applicantName) => updateProject({ applicantName })} />
           <TextField label="連絡人" value={project.contactPerson ?? ""} onChange={(contactPerson) => updateProject({ contactPerson })} />
-          <TextField label="連絡地址" value={project.applicantAddress ?? ""} onChange={(applicantAddress) => updateProject({ applicantAddress })} />
+          <div className="md:col-span-2">
+            <AddressBuilder
+              title="連絡地址快速組合"
+              address={project.applicantAddress ?? ""}
+              onChange={(applicantAddress) => updateProject({ applicantAddress })}
+            />
+          </div>
+          <TextField label="連絡地址" value={project.applicantAddress ?? ""} onChange={(applicantAddress) => updateProject({ applicantAddress })} className="md:col-span-2" />
           <TextField label="連絡電話" value={project.applicantPhone ?? ""} onChange={(applicantPhone) => updateProject({ applicantPhone })} />
           <TextField label="申請日期" type="date" value={project.inspectionDate} onChange={(inspectionDate) => updateProject({ inspectionDate })} icon={<CalendarDays size={16} />} />
           <TextField label="公會收文日期" type="date" value={project.receivedDate ?? ""} onChange={(receivedDate) => updateProject({ receivedDate })} />
@@ -668,6 +675,9 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
 
       <Panel title="主要標的物預設資料" icon={<Home size={18} />}>
         <div className="grid gap-3 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <AddressBuilder title="標的物地址快速組合" address={target.address} onChange={(address) => updateTarget({ address })} />
+          </div>
           <TextField label="標的物地址" value={target.address} onChange={(address) => updateTarget({ address })} className="md:col-span-2" />
           <SelectField label="用途" value={target.usageType} options={usageOptions} onChange={(usageType) => updateTarget({ usageType })} />
           <TextField label="備註" value={target.note} onChange={(note) => updateTarget({ note })} />
@@ -1453,29 +1463,69 @@ function SelectField({
   );
 }
 
-function AddressBuilder({ address, onChange }: { address: string; onChange: (address: string) => void }) {
+function AddressBuilder({
+  title = "地址快速組合",
+  address,
+  onChange,
+}: {
+  title?: string;
+  address: string;
+  onChange: (address: string) => void;
+}) {
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
   const [road, setRoad] = useState("");
-  const [detail, setDetail] = useState("");
+  const [lane, setLane] = useState("");
+  const [alley, setAlley] = useState("");
+  const [numberAndFloor, setNumberAndFloor] = useState("");
+  const [roadOptions, setRoadOptions] = useState(commonRoadNames);
+  const datalistId = useMemo(() => `road-options-${crypto.randomUUID()}`, []);
   const districts = getDistricts(city);
 
-  function compose(next: { city?: string; district?: string; road?: string; detail?: string }) {
+  useEffect(() => {
+    if (!city || !district) {
+      setRoadOptions(commonRoadNames);
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({ city, district });
+    if (road) params.set("q", road);
+
+    fetch(`/api/address/roads?${params.toString()}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { roads?: string[] } | null) => {
+        const officialRoads = payload?.roads ?? [];
+        setRoadOptions(officialRoads.length ? officialRoads : commonRoadNames);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRoadOptions(commonRoadNames);
+      });
+
+    return () => controller.abort();
+  }, [city, district, road]);
+
+  function compose(next: { city?: string; district?: string; road?: string; lane?: string; alley?: string; numberAndFloor?: string }) {
     const nextCity = next.city ?? city;
     const nextDistrict = next.district ?? district;
     const nextRoad = next.road ?? road;
-    const nextDetail = next.detail ?? detail;
-    const composed = `${nextCity}${nextDistrict}${nextRoad}${nextDetail}`.trim();
+    const nextLane = next.lane ?? lane;
+    const nextAlley = next.alley ?? alley;
+    const nextNumberAndFloor = next.numberAndFloor ?? numberAndFloor;
+    const laneText = nextLane ? `${nextLane}巷` : "";
+    const alleyText = nextAlley ? `${nextAlley}弄` : "";
+    const composed = `${nextCity}${nextDistrict}${nextRoad}${laneText}${alleyText}${nextNumberAndFloor}`.trim();
     if (composed) onChange(composed);
   }
 
   return (
     <section className="rounded-md border border-line bg-[#fafaf6] p-3">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="font-bold">地址快速組合</div>
-        <div className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County / District / Road / No.</div>
+        <div className="font-bold">{title}</div>
+        <div className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County / District / Road / Lane / Alley / No.</div>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-6">
         <label className="block">
           <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
             縣市 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County</span>
@@ -1486,7 +1536,8 @@ function AddressBuilder({ address, onChange }: { address: string; onChange: (add
               const nextCity = event.target.value;
               setCity(nextCity);
               setDistrict("");
-              compose({ city: nextCity, district: "" });
+              setRoad("");
+              compose({ city: nextCity, district: "", road: "" });
             }}
             className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
           >
@@ -1508,7 +1559,8 @@ function AddressBuilder({ address, onChange }: { address: string; onChange: (add
             onChange={(event) => {
               const nextDistrict = event.target.value;
               setDistrict(nextDistrict);
-              compose({ district: nextDistrict });
+              setRoad("");
+              compose({ district: nextDistrict, road: "" });
             }}
             className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none disabled:bg-stone-100"
           >
@@ -1522,35 +1574,65 @@ function AddressBuilder({ address, onChange }: { address: string; onChange: (add
         </label>
         <label className="block">
           <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
-            路街 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Road</span>
+            路街段 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Road</span>
           </span>
           <input
-            list="common-road-names"
+            list={datalistId}
             value={road}
             onChange={(event) => {
               const nextRoad = event.target.value;
               setRoad(nextRoad);
               compose({ road: nextRoad });
             }}
-            placeholder="路、街、巷"
+            placeholder="路、街、段"
             className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
           />
-          <datalist id="common-road-names">
-            {commonRoadNames.map((item) => (
+          <datalist id={datalistId}>
+            {roadOptions.map((item) => (
               <option key={item} value={item} />
             ))}
           </datalist>
         </label>
         <label className="block">
           <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            巷 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Lane</span>
+          </span>
+          <input
+            value={lane}
+            onChange={(event) => {
+              const nextLane = event.target.value.replace(/[^\dA-Za-z-]/g, "");
+              setLane(nextLane);
+              compose({ lane: nextLane });
+            }}
+            placeholder="可空白"
+            className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            弄 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Alley</span>
+          </span>
+          <input
+            value={alley}
+            onChange={(event) => {
+              const nextAlley = event.target.value.replace(/[^\dA-Za-z-]/g, "");
+              setAlley(nextAlley);
+              compose({ alley: nextAlley });
+            }}
+            placeholder="可空白"
+            className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
             號樓 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">No./Floor</span>
           </span>
           <input
-            value={detail}
+            value={numberAndFloor}
             onChange={(event) => {
-              const nextDetail = event.target.value;
-              setDetail(nextDetail);
-              compose({ detail: nextDetail });
+              const nextNumberAndFloor = event.target.value;
+              setNumberAndFloor(nextNumberAndFloor);
+              compose({ numberAndFloor: nextNumberAndFloor });
             }}
             placeholder="例如：18號3樓"
             className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
@@ -1558,7 +1640,7 @@ function AddressBuilder({ address, onChange }: { address: string; onChange: (add
         </label>
       </div>
       <p className="mt-2 text-xs text-muted">
-        目前縣市與鄉鎮市區為內建清單；完整路街資料需下一階段接正式地址資料庫或地圖 API，現階段可手動輸入。
+        縣市與鄉鎮市區為內建清單；路街段會優先查詢正式地址資料表，尚未匯入資料時可先手動輸入。
       </p>
       {address ? <div className="mono-data mt-2 rounded border border-line bg-white px-3 py-2 text-xs text-muted">目前地址：{address}</div> : null}
     </section>
