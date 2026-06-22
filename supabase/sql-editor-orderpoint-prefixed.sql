@@ -102,8 +102,7 @@ create table if not exists public.ci_floors (
   floor_name text not null,
   plan_svg_or_json jsonb,
   no_entry_zones jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now(),
-  constraint ci_floors_floor_name_check check (floor_name in ('1F', '2F', '3F', 'RF'))
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.ci_inspection_points (

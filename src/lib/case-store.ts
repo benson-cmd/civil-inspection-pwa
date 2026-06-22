@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createDefaultAttachments, createDefaultSections } from "@/lib/defaults";
+import { defaultFloorNames, emptyFloorRecord, floorIdForTarget } from "@/lib/floors";
 import type {
   AppUser,
   AttachmentSlot,
@@ -280,7 +281,7 @@ async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase:
   }
 
   const floorRows = targets.flatMap((target) =>
-    floorNames.map((floorName) => ({
+    (data.floorNamesByTarget?.[target.id] ?? defaultFloorNames).map((floorName) => ({
       id: floorIdForTarget(target.id, floorName),
       target_id: target.id,
       floor_name: floorName,
@@ -405,6 +406,7 @@ function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): Atta
   const targets = row.ci_targets?.length
     ? row.ci_targets.map(targetRowToTarget)
     : [fallbackTarget];
+  const floorNamesByTarget: AttachmentSevenData["floorNamesByTarget"] = {};
   const plansByTargetFloor: AttachmentSevenData["plansByTargetFloor"] = {};
   const noEntryZonesByTargetFloor: AttachmentSevenData["noEntryZonesByTargetFloor"] = {};
   const points: InspectionPoint[] = [];
@@ -412,6 +414,8 @@ function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): Atta
   const floors = (row.ci_targets ?? []).flatMap((target) => target.ci_floors ?? []);
 
   for (const floor of floors) {
+    if (!floorNamesByTarget[floor.target_id]) floorNamesByTarget[floor.target_id] = [];
+    if (!floorNamesByTarget[floor.target_id].includes(floor.floor_name)) floorNamesByTarget[floor.target_id].push(floor.floor_name);
     if (!plansByTargetFloor[floor.target_id]) plansByTargetFloor[floor.target_id] = emptyFloorRecord<string[]>();
     if (!noEntryZonesByTargetFloor[floor.target_id]) noEntryZonesByTargetFloor[floor.target_id] = emptyFloorRecord<NoEntryZone[]>();
 
@@ -425,6 +429,9 @@ function buildAttachmentSevenData(row: ProjectRow, fallbackTarget: Target): Atta
 
   return {
     targets,
+    floorNamesByTarget: Object.fromEntries(
+      targets.map((target) => [target.id, floorNamesByTarget[target.id]?.length ? floorNamesByTarget[target.id] : defaultFloorNames]),
+    ),
     plansByTargetFloor,
     noEntryZonesByTargetFloor,
     points,
@@ -525,19 +532,4 @@ function parseEngineers(value: string | null): ProjectEngineer[] {
 function normalizeReportStatus(value: string | null): ReportStatus {
   if (value === "審閱中" || value === "待補件" || value === "完稿" || value === "已歸檔") return value;
   return "草稿";
-}
-
-const floorNames: FloorName[] = ["1F", "2F", "3F", "RF"];
-
-function floorIdForTarget(targetId: string, floorName: FloorName) {
-  return `${targetId}__floor-${floorName}`;
-}
-
-function emptyFloorRecord<T>(): Record<FloorName, T> {
-  return {
-    "1F": [] as T,
-    "2F": [] as T,
-    "3F": [] as T,
-    RF: [] as T,
-  };
 }

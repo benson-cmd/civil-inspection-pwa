@@ -21,7 +21,9 @@ import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
 import { appUserFromSupabaseUser, ensureProfile, fetchInspectionCases, saveInspectionCase } from "@/lib/case-store";
 import { createCase } from "@/lib/defaults";
+import { defaultFloorNames, emptyFloorRecord, floorIdForTarget } from "@/lib/floors";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
+import { commonRoadNames, getDistricts, taiwanAddress } from "@/lib/tw-address";
 import type {
   AppUser,
   AttachmentSlot,
@@ -40,7 +42,6 @@ import type {
 type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
 type AppView = "workspace" | "users";
 
-const floorNames: FloorName[] = ["1F", "2F", "3F", "RF"];
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
 const wallFinishOptions = ["水泥粉光", "油漆", "壁紙", "磁磚", "裝飾品", "其他"];
 const ceilingFinishOptions = ["水泥粉光", "油漆", "壁紙", "木架", "輕鋼架", "其他"];
@@ -397,19 +398,6 @@ function formatRocDate(date: string | undefined) {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return "";
   return `中 華 民 國 ${parsed.getFullYear() - 1911} 年 ${parsed.getMonth() + 1} 月 ${parsed.getDate()} 日`;
-}
-
-function floorIdForTarget(targetId: string, floorName: FloorName) {
-  return `${targetId}__floor-${floorName}`;
-}
-
-function emptyFloorRecord<T>(): Record<FloorName, T> {
-  return {
-    "1F": [] as T,
-    "2F": [] as T,
-    "3F": [] as T,
-    RF: [] as T,
-  };
 }
 
 function UserManagementPanel({
@@ -802,6 +790,10 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   );
   const [activeTargetId, setActiveTargetId] = useState(activeCase.target.id);
   const [activeFloorName, setActiveFloorName] = useState<FloorName>("1F");
+  const [newFloorName, setNewFloorName] = useState("");
+  const [floorNamesByTarget, setFloorNamesByTarget] = useState<Record<string, FloorName[]>>(
+    () => activeCase.attachmentSeven?.floorNamesByTarget ?? { [activeCase.target.id]: defaultFloorNames },
+  );
   const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, string[]>>>(
     () => activeCase.attachmentSeven?.plansByTargetFloor ?? {},
   );
@@ -813,6 +805,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
 
   const project = activeCase.project;
   const target = targets.find((item) => item.id === activeTargetId) ?? targets[0] ?? activeCase.target;
+  const targetFloorNames = floorNamesByTarget[target.id] ?? defaultFloorNames;
   const activeFloorId = floorIdForTarget(target.id, activeFloorName);
   const activePlanPaths = plansByTargetFloor[target.id]?.[activeFloorName] ?? [];
   const activeNoEntryZones = noEntryZonesByTargetFloor[target.id]?.[activeFloorName] ?? [];
@@ -822,17 +815,19 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   useEffect(() => {
     const nextTargets = activeCase.attachmentSeven?.targets.length ? activeCase.attachmentSeven.targets : [{ ...activeCase.target }];
     setTargets(nextTargets);
+    setFloorNamesByTarget(activeCase.attachmentSeven?.floorNamesByTarget ?? { [nextTargets[0]?.id ?? activeCase.target.id]: defaultFloorNames });
     setPlansByTargetFloor(activeCase.attachmentSeven?.plansByTargetFloor ?? {});
     setNoEntryZonesByTargetFloor(activeCase.attachmentSeven?.noEntryZonesByTargetFloor ?? {});
     setPoints(activeCase.attachmentSeven?.points ?? []);
     setActiveTargetId(nextTargets[0]?.id ?? activeCase.target.id);
     setActiveFloorName("1F");
+    setNewFloorName("");
     setActivePointId(undefined);
   }, [activeCase.id]);
 
   const floors: Floor[] = useMemo(
     () =>
-      floorNames.map((floorName) => {
+      targetFloorNames.map((floorName) => {
         const floorId = floorIdForTarget(target.id, floorName);
         const floorSpecificPoints = points.filter((point) => point.floorId === floorId);
         return {
@@ -846,7 +841,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           ),
         };
       }),
-    [noEntryZonesByTargetFloor, plansByTargetFloor, points, target.id],
+    [noEntryZonesByTargetFloor, plansByTargetFloor, points, target.id, targetFloorNames],
   );
 
   function updateTarget(patch: Partial<Target>) {
@@ -864,23 +859,31 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
       note: "",
     };
     const nextTargets = [...targets, newTarget];
+    const nextFloorNamesByTarget = {
+      ...floorNamesByTarget,
+      [newTarget.id]: defaultFloorNames,
+    };
     setTargets(nextTargets);
+    setFloorNamesByTarget(nextFloorNamesByTarget);
     setActiveTargetId(newTarget.id);
     setActiveFloorName("1F");
     setActivePointId(undefined);
-    persistAttachmentSeven({ targets: nextTargets });
+    persistAttachmentSeven({ targets: nextTargets, floorNamesByTarget: nextFloorNamesByTarget });
   }
 
   function removeTarget(targetId: string) {
     if (targets.length <= 1) return;
     const nextTargets = targets.filter((item) => item.id !== targetId);
+    const nextFloorNamesByTarget = { ...floorNamesByTarget };
     const nextPlans = { ...plansByTargetFloor };
     const nextNoEntryZones = { ...noEntryZonesByTargetFloor };
     const nextPoints = points.filter((point) => !point.floorId.startsWith(`${targetId}__`));
+    delete nextFloorNamesByTarget[targetId];
     delete nextPlans[targetId];
     delete nextNoEntryZones[targetId];
 
     setTargets(nextTargets);
+    setFloorNamesByTarget(nextFloorNamesByTarget);
     setPlansByTargetFloor(nextPlans);
     setNoEntryZonesByTargetFloor(nextNoEntryZones);
     setPoints(nextPoints);
@@ -891,6 +894,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     }
     persistAttachmentSeven({
       targets: nextTargets,
+      floorNamesByTarget: nextFloorNamesByTarget,
       plansByTargetFloor: nextPlans,
       noEntryZonesByTargetFloor: nextNoEntryZones,
       points: nextPoints,
@@ -921,6 +925,52 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     };
     setNoEntryZonesByTargetFloor(nextNoEntryZones);
     persistAttachmentSeven({ noEntryZonesByTargetFloor: nextNoEntryZones });
+  }
+
+  function addFloor() {
+    const normalizedName = newFloorName.trim();
+    if (!normalizedName || targetFloorNames.includes(normalizedName)) return;
+    const nextFloorNamesByTarget = {
+      ...floorNamesByTarget,
+      [target.id]: [...targetFloorNames, normalizedName],
+    };
+    setFloorNamesByTarget(nextFloorNamesByTarget);
+    setActiveFloorName(normalizedName);
+    setNewFloorName("");
+    persistAttachmentSeven({ floorNamesByTarget: nextFloorNamesByTarget });
+  }
+
+  function removeFloor(floorName: FloorName) {
+    if (defaultFloorNames.includes(floorName) || targetFloorNames.length <= 1) return;
+    const nextFloorNames = targetFloorNames.filter((item) => item !== floorName);
+    const nextPlans = {
+      ...plansByTargetFloor,
+      [target.id]: {
+        ...(plansByTargetFloor[target.id] ?? {}),
+      },
+    };
+    const nextNoEntryZones = {
+      ...noEntryZonesByTargetFloor,
+      [target.id]: {
+        ...(noEntryZonesByTargetFloor[target.id] ?? {}),
+      },
+    };
+    const nextPoints = points.filter((point) => point.floorId !== floorIdForTarget(target.id, floorName));
+    const nextFloorNamesByTarget = { ...floorNamesByTarget, [target.id]: nextFloorNames };
+    delete nextPlans[target.id][floorName];
+    delete nextNoEntryZones[target.id][floorName];
+
+    setFloorNamesByTarget(nextFloorNamesByTarget);
+    setPlansByTargetFloor(nextPlans);
+    setNoEntryZonesByTargetFloor(nextNoEntryZones);
+    setPoints(nextPoints);
+    if (activeFloorName === floorName) setActiveFloorName(nextFloorNames[0] ?? "1F");
+    persistAttachmentSeven({
+      floorNamesByTarget: nextFloorNamesByTarget,
+      plansByTargetFloor: nextPlans,
+      noEntryZonesByTargetFloor: nextNoEntryZones,
+      points: nextPoints,
+    });
   }
 
   function addPoint(position: { x: number; y: number }) {
@@ -970,6 +1020,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   ) {
     const nextData = {
       targets,
+      floorNamesByTarget,
       plansByTargetFloor,
       noEntryZonesByTargetFloor,
       points,
@@ -1013,16 +1064,19 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             </button>
           ))}
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <TextField label="標的物之坐落" value={target.address} onChange={(address) => updateTarget({ address })} />
-          <button
-            type="button"
-            disabled={targets.length <= 1}
-            onClick={() => removeTarget(target.id)}
-            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trash2 size={16} /> 刪除此標的物
-          </button>
+        <div className="grid gap-3">
+          <AddressBuilder address={target.address} onChange={(address) => updateTarget({ address })} />
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <TextField label="標的物之坐落" value={target.address} onChange={(address) => updateTarget({ address })} />
+            <button
+              type="button"
+              disabled={targets.length <= 1}
+              onClick={() => removeTarget(target.id)}
+              className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 size={16} /> 刪除此標的物
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1074,18 +1128,44 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
               <Building2 size={18} /> 樓層
             </div>
             <div className="flex flex-wrap gap-2">
-              {floorNames.map((floorName) => (
-                <button
-                  key={floorName}
-                  type="button"
-                  onClick={() => setActiveFloorName(floorName)}
-                  className={`min-h-11 rounded-md border px-4 text-sm font-bold ${
-                    floorName === activeFloorName ? "border-accent bg-accent text-white" : "border-line bg-white"
-                  }`}
-                >
-                  {floorName}
-                </button>
+              {targetFloorNames.map((floorName) => (
+                <span key={floorName} className="inline-flex overflow-hidden rounded-md border border-line bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFloorName(floorName)}
+                    className={`mono-data min-h-11 px-4 text-sm font-bold ${
+                      floorName === activeFloorName ? "bg-accent text-white" : "bg-white"
+                    }`}
+                  >
+                    {floorName}
+                  </button>
+                  {!defaultFloorNames.includes(floorName) ? (
+                    <button
+                      type="button"
+                      onClick={() => removeFloor(floorName)}
+                      className="min-h-11 border-l border-line px-2 text-xs font-bold text-muted"
+                      title="刪除此自訂樓層"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
               ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={newFloorName}
+                onChange={(event) => setNewFloorName(event.target.value)}
+                placeholder="自訂樓層，如 B1、4F"
+                className="mono-data min-h-11 w-44 rounded-md border border-line bg-white px-3 text-sm outline-none"
+              />
+              <button
+                type="button"
+                onClick={addFloor}
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+              >
+                <Plus size={18} /> 新增樓層
+              </button>
             </div>
             <button
               type="button"
@@ -1370,6 +1450,118 @@ function SelectField({
         ))}
       </select>
     </label>
+  );
+}
+
+function AddressBuilder({ address, onChange }: { address: string; onChange: (address: string) => void }) {
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [road, setRoad] = useState("");
+  const [detail, setDetail] = useState("");
+  const districts = getDistricts(city);
+
+  function compose(next: { city?: string; district?: string; road?: string; detail?: string }) {
+    const nextCity = next.city ?? city;
+    const nextDistrict = next.district ?? district;
+    const nextRoad = next.road ?? road;
+    const nextDetail = next.detail ?? detail;
+    const composed = `${nextCity}${nextDistrict}${nextRoad}${nextDetail}`.trim();
+    if (composed) onChange(composed);
+  }
+
+  return (
+    <section className="rounded-md border border-line bg-[#fafaf6] p-3">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="font-bold">地址快速組合</div>
+        <div className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County / District / Road / No.</div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            縣市 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County</span>
+          </span>
+          <select
+            value={city}
+            onChange={(event) => {
+              const nextCity = event.target.value;
+              setCity(nextCity);
+              setDistrict("");
+              compose({ city: nextCity, district: "" });
+            }}
+            className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          >
+            <option value="">選擇縣市</option>
+            {taiwanAddress.map((item) => (
+              <option key={item.city} value={item.city}>
+                {item.city}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            鄉鎮市區 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">District</span>
+          </span>
+          <select
+            value={district}
+            disabled={!city}
+            onChange={(event) => {
+              const nextDistrict = event.target.value;
+              setDistrict(nextDistrict);
+              compose({ district: nextDistrict });
+            }}
+            className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none disabled:bg-stone-100"
+          >
+            <option value="">選擇行政區</option>
+            {districts.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            路街 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Road</span>
+          </span>
+          <input
+            list="common-road-names"
+            value={road}
+            onChange={(event) => {
+              const nextRoad = event.target.value;
+              setRoad(nextRoad);
+              compose({ road: nextRoad });
+            }}
+            placeholder="路、街、巷"
+            className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          />
+          <datalist id="common-road-names">
+            {commonRoadNames.map((item) => (
+              <option key={item} value={item} />
+            ))}
+          </datalist>
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            號樓 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">No./Floor</span>
+          </span>
+          <input
+            value={detail}
+            onChange={(event) => {
+              const nextDetail = event.target.value;
+              setDetail(nextDetail);
+              compose({ detail: nextDetail });
+            }}
+            placeholder="例如：18號3樓"
+            className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          />
+        </label>
+      </div>
+      <p className="mt-2 text-xs text-muted">
+        目前縣市與鄉鎮市區為內建清單；完整路街資料需下一階段接正式地址資料庫或地圖 API，現階段可手動輸入。
+      </p>
+      {address ? <div className="mono-data mt-2 rounded border border-line bg-white px-3 py-2 text-xs text-muted">目前地址：{address}</div> : null}
+    </section>
   );
 }
 

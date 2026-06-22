@@ -1,4 +1,5 @@
 import type { AttachmentSlot, InspectionCase, Project, ReportSection, Target } from "@/types/inspection";
+import { defaultFloorNames } from "@/lib/floors";
 
 export function createCase(userId: string): InspectionCase {
   const projectId = crypto.randomUUID();
@@ -41,6 +42,9 @@ export function createCase(userId: string): InspectionCase {
     target,
     attachmentSeven: {
       targets: [target],
+      floorNamesByTarget: {
+        [target.id]: defaultFloorNames,
+      },
       plansByTargetFloor: {},
       noEntryZonesByTargetFloor: {},
       points: [],

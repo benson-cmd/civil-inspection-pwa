@@ -1,4 +1,4 @@
-export type FloorName = "1F" | "2F" | "3F" | "RF";
+export type FloorName = string;
 
 export type ComponentType = "全景" | "牆面" | "平頂" | "地坪" | "梁" | "柱" | "其他";
 
@@ -134,6 +134,7 @@ export interface InspectionCase {
 
 export interface AttachmentSevenData {
   targets: Target[];
+  floorNamesByTarget: Record<string, FloorName[]>;
   plansByTargetFloor: Record<string, Record<FloorName, string[]>>;
   noEntryZonesByTargetFloor: Record<string, Record<FloorName, NoEntryZone[]>>;
   points: InspectionPoint[];
