@@ -505,6 +505,11 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
   await saveTiltMeasurements(supabase, inspectionCase);
 }
 
+export async function deleteInspectionCase(supabase: SupabaseClient, projectId: string) {
+  const { error } = await supabase.from("ci_projects").delete().eq("id", projectId);
+  if (error) throw error;
+}
+
 async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase: InspectionCase) {
   const data = inspectionCase.attachmentSeven;
   if (!data) return;

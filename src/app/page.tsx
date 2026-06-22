@@ -27,6 +27,7 @@ import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
 import {
   deleteManagedUser,
+  deleteInspectionCase,
   fetchInspectionCases,
   fetchManagedUsers,
   resolveSignedInAppUser,
@@ -200,6 +201,30 @@ export default function HomePage() {
     persistCase(nextCase);
   }
 
+  async function removeCase(targetCase: InspectionCase) {
+    const confirmed = window.confirm(
+      `確定要刪除案件「${targetCase.project.caseNo} ${targetCase.project.projectName}」嗎？\n\n刪除後此案件的基本資料、附件七/八與測量資料都會一併移除，且無法復原。`,
+    );
+    if (!confirmed) return;
+
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+
+    try {
+      await deleteInspectionCase(supabase, targetCase.id);
+      setCases((current) => {
+        const nextCases = current.filter((item) => item.id !== targetCase.id);
+        const fallbackCase = nextCases[0] ?? createCase(currentUser?.id ?? "user-admin");
+        setActiveCaseId(fallbackCase.id);
+        setActiveTab("basic");
+        return nextCases.length ? nextCases : [fallbackCase];
+      });
+    } catch (error) {
+      console.error("Failed to delete inspection case", error);
+      window.alert(error instanceof Error ? error.message : "案件刪除失敗，請稍後再試。");
+    }
+  }
+
   if (authLoading) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 text-foreground">
@@ -334,26 +359,39 @@ export default function HomePage() {
             />
             <div className="grid gap-2">
               {filteredCases.map((item) => (
-                <button
+                <article
                   key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveCaseId(item.id);
-                    setActiveTab("basic");
-                  }}
                   className={`rounded-md border p-3 text-left ${
                     item.id === activeCase.id ? "border-accent bg-[#f5f5f4]" : "border-line bg-white"
                   }`}
                 >
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="mono-data block font-bold">{item.project.caseNo}</span>
-                    <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${reportStatusBadgeClass(item.project.reportStatus ?? "草稿")}`}>
-                      {item.project.reportStatus ?? "草稿"}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveCaseId(item.id);
+                      setActiveTab("basic");
+                    }}
+                    className="block w-full text-left"
+                  >
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="mono-data block font-bold">{item.project.caseNo}</span>
+                      <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${reportStatusBadgeClass(item.project.reportStatus ?? "草稿")}`}>
+                        {item.project.reportStatus ?? "草稿"}
+                      </span>
                     </span>
-                  </span>
-                  <span className="block text-sm text-muted">{item.project.projectName}</span>
-                  <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
-                </button>
+                    <span className="block text-sm text-muted">{item.project.projectName}</span>
+                    <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
+                  </button>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void removeCase(item)}
+                      className="inline-flex min-h-9 items-center gap-1 rounded-md border border-red-200 bg-white px-2 text-xs font-semibold text-red-700"
+                    >
+                      <Trash2 size={14} /> 刪除
+                    </button>
+                  </div>
+                </article>
               ))}
               {filteredCases.length === 0 ? (
                 <div className="rounded-md border border-dashed border-line bg-white p-3 text-sm text-muted">
