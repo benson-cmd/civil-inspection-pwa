@@ -1,5 +1,7 @@
 -- 06. Address road dictionary for fast address composition.
--- Import official road/street data into this table after creating it.
+-- This creates the table only. It does not import any road names.
+-- Run sql-editor-07-seed-address-roads-fallback.sql after this file,
+-- or import an official road/street dataset into public.ci_address_roads.
 
 create table if not exists public.ci_address_roads (
   id uuid primary key default gen_random_uuid(),
