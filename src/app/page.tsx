@@ -19,6 +19,8 @@ import { InspectionForm } from "@/components/InspectionForm";
 import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
+import { appUserFromSupabaseUser, ensureProfile, fetchInspectionCases, saveInspectionCase } from "@/lib/case-store";
+import { createCase } from "@/lib/defaults";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
   AppUser,
@@ -31,7 +33,6 @@ import type {
   Project,
   ProjectEngineer,
   ReportStatus,
-  ReportSection,
   SitePhoto,
   Target,
 } from "@/types/inspection";
@@ -66,21 +67,17 @@ export default function HomePage() {
       return;
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        const signedInUser = {
-          id: data.user.id,
-          name: data.user.user_metadata?.name ?? data.user.email ?? "Google 使用者",
-          email: data.user.email ?? "",
-          role: "admin" as const,
-        };
-        setCurrentUser({
-          ...signedInUser,
-        });
-        setManagedUsers((current) => upsertManagedUser(current, signedInUser));
-      }
-      setAuthLoading(false);
-    });
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (data.user) {
+          return loadSignedInUser(data.user);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load Supabase user", error);
+      })
+      .finally(() => setAuthLoading(false));
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) {
@@ -88,15 +85,7 @@ export default function HomePage() {
         return;
       }
 
-      const signedInUser = {
-        id: session.user.id,
-        name: session.user.user_metadata?.name ?? session.user.email ?? "Google 使用者",
-        email: session.user.email ?? "",
-        role: "admin" as const,
-      };
-
-      setCurrentUser(signedInUser);
-      setManagedUsers((current) => upsertManagedUser(current, signedInUser));
+      void loadSignedInUser(session.user);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -117,20 +106,65 @@ export default function HomePage() {
   async function signOut() {
     const supabase = createSupabaseBrowserClient();
     await supabase?.auth.signOut();
+    const signedOutCase = createCase("user-admin");
     setCurrentUser(null);
+    setCases([signedOutCase]);
+    setActiveCaseId(signedOutCase.id);
+    setActiveTab("basic");
+    setActiveView("workspace");
+  }
+
+  async function loadSignedInUser(user: Parameters<typeof appUserFromSupabaseUser>[0]) {
+    const signedInUser = appUserFromSupabaseUser(user);
+    const supabase = createSupabaseBrowserClient();
+
+    setCurrentUser(signedInUser);
+    setManagedUsers((current) => upsertManagedUser(current, signedInUser));
+
+    if (!supabase) return;
+
+    try {
+      await ensureProfile(supabase, signedInUser);
+      const savedCases = await fetchInspectionCases(supabase, signedInUser.id);
+      if (savedCases.length) {
+        setCases(savedCases);
+        setActiveCaseId(savedCases[0].id);
+        return;
+      }
+
+      const firstCase = createCase(signedInUser.id);
+      setCases([firstCase]);
+      setActiveCaseId(firstCase.id);
+      await saveInspectionCase(supabase, firstCase);
+    } catch (error) {
+      console.error("Failed to load inspection cases from Supabase", error);
+    }
+  }
+
+  function persistCase(nextCase: InspectionCase) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase || !currentUser) return;
+
+    void saveInspectionCase(supabase, nextCase).catch((error) => {
+      console.error("Failed to save inspection case to Supabase", error);
+    });
   }
 
   function updateCase(nextCase: InspectionCase) {
+    const persistedCase = {
+      ...nextCase,
+      updatedAt: new Date().toISOString(),
+      project: {
+        ...nextCase.project,
+        updatedAt: new Date().toISOString(),
+      },
+    };
     setCases((current) =>
       current.map((item) =>
-        item.id === nextCase.id
-          ? {
-              ...nextCase,
-              updatedAt: new Date().toISOString(),
-            }
-          : item,
+        item.id === persistedCase.id ? persistedCase : item,
       ),
     );
+    persistCase(persistedCase);
   }
 
   function addCase() {
@@ -139,6 +173,7 @@ export default function HomePage() {
     setActiveCaseId(nextCase.id);
     setActiveTab("basic");
     setActiveView("workspace");
+    persistCase(nextCase);
   }
 
   if (authLoading) {
@@ -1301,129 +1336,6 @@ function InfoLine({ label, value }: { label: string; value: string }) {
       <div className="mt-1 font-bold">{value || "尚未填寫"}</div>
     </div>
   );
-}
-
-function createCase(userId: string): InspectionCase {
-  const project: Project = {
-    id: crypto.randomUUID(),
-    caseNo: "115鑑000號",
-    projectName: "鄰房現況鑑定報告書",
-    applicantName: "OO營造有限公司",
-    applicantAddress: "",
-    applicantPhone: "",
-    contactPerson: "",
-    inspectionType: "施工前鄰房現況鑑定",
-    inspectionDate: new Date().toISOString().slice(0, 10),
-    reportStatus: "草稿",
-    receivedDate: "",
-    receivedNo: "",
-    targetSummary: "",
-    engineers: [{ id: crypto.randomUUID(), name: "", memberNo: "" }],
-    engineerNames: "",
-    finalDate: "",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  const target: Target = {
-    id: crypto.randomUUID(),
-    projectId: project.id,
-    address: "臺中市○○區○○路○○號",
-    usageType: "住宅",
-    wallFinish: "油漆",
-    ceilingFinish: "其他",
-    floorFinish: "其他",
-    surveyStatus: "",
-    note: "",
-  };
-
-  return {
-    id: crypto.randomUUID(),
-    project,
-    target,
-    reportSections: createDefaultSections(project),
-    attachments: createDefaultAttachments(),
-    createdByUserId: userId,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function createDefaultSections(project: Project): ReportSection[] {
-  return [
-    {
-      id: "applicant",
-      order: 1,
-      title: "一、申請單位",
-      source: "basic",
-      fixedTitle: true,
-      content: `申請單位：${project.applicantName}\n連絡地址：${project.applicantAddress ?? ""}\n連絡電話：${project.applicantPhone ?? ""}\n連絡人 ︰${project.contactPerson ?? ""}`,
-    },
-    {
-      id: "application-date",
-      order: 2,
-      title: "二、申請日期",
-      source: "basic",
-      fixedTitle: true,
-      content: `民國○○○年○月○日\n(社團法人臺中市土木技師公會 ○○○年○月○日收文號：鑑○○○)`,
-    },
-    {
-      id: "target-location",
-      order: 3,
-      title: "三、標的物之坐落",
-      source: "basic",
-      fixedTitle: true,
-      content: project.targetSummary ?? "",
-    },
-    { id: "purpose", order: 4, title: "四、鑑定要旨", source: "editable", fixedTitle: true, content: "請輸入鑑定要旨。" },
-    {
-      id: "basis",
-      order: 5,
-      title: "五、鑑定依據",
-      source: "editable",
-      fixedTitle: true,
-      content: "鑑定依據：\n(一) 鑑定申請書(詳附件一)。\n(二) 本公會會勘通知函(詳附件二)。\n(三) 彰化縣建築物施工損壞鄰房事件處理自治條例。\n(四) 臺中市土木技師公會鑑定手冊。",
-    },
-    { id: "inspection-dates", order: 6, title: "六、會勘日期", source: "editable", fixedTitle: true, content: "第一次：" },
-    {
-      id: "staff",
-      order: 7,
-      title: "七、會勘人員",
-      source: "basic",
-      fixedTitle: true,
-      content: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${formatEngineerNames(project)} 技師\n所有權人代表：詳附件三。`,
-    },
-    { id: "process", order: 8, title: "八、鑑定過程", source: "editable", fixedTitle: true, content: "請輸入鑑定過程。" },
-    { id: "site-status", order: 9, title: "九、工地現況", source: "editable", fixedTitle: true, content: "請輸入工地現況。" },
-    {
-      id: "target-status",
-      order: 10,
-      title: "十、鑑定標的物之用途及現況",
-      source: "attachment7",
-      fixedTitle: true,
-      content: "(一) 用途及現況：\n系統將抓取附件七各標的物住址與用途資料。\n\n(二) 現況調查記錄：\n工地及鄰房相關之水準測量成果詳附件五。\n鄰房相關之傾斜測量之成果詳附件六。\n各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。",
-    },
-    {
-      id: "attachments",
-      order: 11,
-      title: "十一、附件",
-      source: "attachments",
-      fixedTitle: true,
-      content: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
-    },
-  ];
-}
-
-function createDefaultAttachments(): AttachmentSlot[] {
-  return [
-    { id: "att-1", no: 1, title: "鑑定申請書", mode: "upload", status: "empty" },
-    { id: "att-2", no: 2, title: "會勘通知函", mode: "upload", status: "empty" },
-    { id: "att-3", no: 3, title: "會勘紀錄表", mode: "upload", status: "empty" },
-    { id: "att-4", no: 4, title: "工地及鑑定標的物位置圖", mode: "editor", status: "editing" },
-    { id: "att-5", no: 5, title: "水準測量", mode: "upload", status: "empty" },
-    { id: "att-6", no: 6, title: "傾斜率測量", mode: "upload", status: "empty" },
-    { id: "att-7", no: 7, title: "鑑定標的物平面配置圖、現況調查紀錄表及照片", mode: "editor", status: "editing" },
-    { id: "att-8", no: 8, title: "基地現況照片", mode: "editor", status: "editing" },
-  ];
 }
 
 function toChineseNumber(value: number) {
