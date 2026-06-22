@@ -25,7 +25,14 @@ import { InspectionForm } from "@/components/InspectionForm";
 import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
-import { appUserFromSupabaseUser, ensureProfile, fetchInspectionCases, saveInspectionCase } from "@/lib/case-store";
+import {
+  deleteManagedUser,
+  fetchInspectionCases,
+  fetchManagedUsers,
+  resolveSignedInAppUser,
+  saveInspectionCase,
+  saveManagedUser,
+} from "@/lib/case-store";
 import { createCase } from "@/lib/defaults";
 import { defaultFloorNames, emptyFloorRecord, floorIdForTarget } from "@/lib/floors";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
@@ -64,6 +71,7 @@ export default function HomePage() {
   const [activeView, setActiveView] = useState<AppView>("workspace");
   const [managedUsers, setManagedUsers] = useState<AppUser[]>([]);
   const [caseSearch, setCaseSearch] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
   const filteredCases = cases.filter(
@@ -127,17 +135,16 @@ export default function HomePage() {
     setActiveView("workspace");
   }
 
-  async function loadSignedInUser(user: Parameters<typeof appUserFromSupabaseUser>[0]) {
-    const signedInUser = appUserFromSupabaseUser(user);
+  async function loadSignedInUser(user: Parameters<typeof resolveSignedInAppUser>[1]) {
     const supabase = createSupabaseBrowserClient();
-
-    setCurrentUser(signedInUser);
-    setManagedUsers((current) => upsertManagedUser(current, signedInUser));
 
     if (!supabase) return;
 
     try {
-      await ensureProfile(supabase, signedInUser);
+      const signedInUser = await resolveSignedInAppUser(supabase, user);
+      setAuthError("");
+      setCurrentUser(signedInUser);
+      setManagedUsers(await fetchManagedUsers(supabase, signedInUser));
       const savedCases = await fetchInspectionCases(supabase, signedInUser.id);
       if (savedCases.length) {
         setCases(savedCases);
@@ -151,6 +158,10 @@ export default function HomePage() {
       await saveInspectionCase(supabase, firstCase);
     } catch (error) {
       console.error("Failed to load inspection cases from Supabase", error);
+      const message = error instanceof Error ? error.message : "登入失敗，請確認此 Google 帳戶是否已被管理者授權。";
+      setAuthError(message);
+      await supabase.auth.signOut();
+      setCurrentUser(null);
     }
   }
 
@@ -225,13 +236,16 @@ export default function HomePage() {
             </div>
             <div className="p-6 md:p-8">
               {supabaseEnabled ? (
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
-                >
-                  <LogIn size={20} /> 使用 Google 帳戶登入
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={signInWithGoogle}
+                    className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
+                  >
+                    <LogIn size={20} /> 使用 Google 帳戶登入
+                  </button>
+                  {authError ? <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">{authError}</p> : null}
+                </>
               ) : (
                 <div className="mt-6 rounded-md border border-line bg-[#f5f5f4] p-4 text-sm text-accent">
                   尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
@@ -287,7 +301,16 @@ export default function HomePage() {
 
       {activeView === "users" && currentUser.role === "admin" ? (
         <section className="mx-auto max-w-7xl">
-          <UserManagementPanel users={managedUsers} onChange={setManagedUsers} currentUserId={currentUser.id} />
+          <UserManagementPanel
+            users={managedUsers}
+            onChange={setManagedUsers}
+            currentUserId={currentUser.id}
+            onRefresh={async () => {
+              const supabase = createSupabaseBrowserClient();
+              if (!supabase || !currentUser) return;
+              setManagedUsers(await fetchManagedUsers(supabase, currentUser));
+            }}
+          />
         </section>
       ) : (
         <section className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -495,40 +518,84 @@ function UserManagementPanel({
   users,
   onChange,
   currentUserId,
+  onRefresh,
 }: {
   users: AppUser[];
   onChange: (users: AppUser[]) => void;
   currentUserId: string;
+  onRefresh: () => Promise<void>;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<AppUser["role"]>("user");
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [draftUser, setDraftUser] = useState<AppUser | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
 
-  function addUser() {
+  async function addUser() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) return;
-    onChange(
-      upsertManagedUser(users, {
-        id: `pending-${normalizedEmail}`,
-        name: name.trim() || normalizedEmail,
-        email: normalizedEmail,
-        role,
-      }),
-    );
+    const nextUser = {
+      id: `pending-${normalizedEmail}`,
+      name: name.trim() || normalizedEmail,
+      email: normalizedEmail,
+      role,
+    };
+    await persistUser(nextUser);
     setEmail("");
     setName("");
     setRole("user");
   }
 
+  async function persistUser(user: AppUser, previousEmail?: string) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setBusyUserId(user.id);
+    setMessage("");
+    try {
+      const savedUser = await saveManagedUser(supabase, user, previousEmail);
+      onChange(upsertManagedUser(users, savedUser));
+      await onRefresh();
+      setEditingUserId(null);
+      setDraftUser(null);
+      setMessage("使用者資料已儲存。");
+    } catch (error) {
+      console.error("Failed to save managed user", error);
+      setMessage(error instanceof Error ? error.message : "使用者資料儲存失敗。");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function removeUser(user: AppUser) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setBusyUserId(user.id);
+    setMessage("");
+    try {
+      await deleteManagedUser(supabase, user);
+      onChange(users.filter((item) => item.id !== user.id));
+      await onRefresh();
+      setMessage("已移除該 Google 帳戶的登入授權。");
+    } catch (error) {
+      console.error("Failed to delete managed user", error);
+      setMessage(error instanceof Error ? error.message : "使用者刪除失敗。");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
   return (
     <section className="workspace-panel mb-4 rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-bold">
-          <Users size={18} /> 使用者管理
-        </h2>
-        <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-muted">
-          {users.length} 位使用者
-        </span>
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <Users size={18} /> 使用者管理
+          </h2>
+          <p className="mt-1 text-sm text-muted">新增 Google Email 後，該帳戶登入時會自動套用這裡設定的姓名與角色。</p>
+        </div>
+        <span className="rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-muted">{users.length} 位使用者</span>
       </div>
       <div className="grid gap-3 md:grid-cols-[1fr_1fr_160px_auto]">
         <TextField label="Google Email" value={email} onChange={setEmail} />
@@ -537,11 +604,13 @@ function UserManagementPanel({
         <button
           type="button"
           onClick={addUser}
-          className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white"
+          disabled={!email.trim() || busyUserId !== null}
+          className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={18} /> 新增
         </button>
       </div>
+      {message ? <p className="mt-3 rounded-md border border-line bg-white p-3 text-sm font-semibold text-muted">{message}</p> : null}
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
@@ -553,34 +622,95 @@ function UserManagementPanel({
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="bg-white">
-                <td className="border border-line p-2 font-bold">{user.name}</td>
-                <td className="border border-line p-2">{user.email}</td>
-                <td className="border border-line p-2">
-                  <select
-                    value={user.role}
-                    onChange={(event) =>
-                      onChange(users.map((item) => (item.id === user.id ? { ...item, role: event.target.value as AppUser["role"] } : item)))
-                    }
-                    className="min-h-10 rounded-md border border-line bg-white px-2"
-                  >
-                    <option value="admin">管理者</option>
-                    <option value="user">使用者</option>
-                  </select>
-                </td>
-                <td className="border border-line p-2">
-                  <button
-                    type="button"
-                    disabled={user.id === currentUserId}
-                    onClick={() => onChange(users.filter((item) => item.id !== user.id))}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Trash2 size={16} /> 刪除
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {users.map((user) => {
+              const isEditing = editingUserId === user.id && draftUser;
+              const rowUser = isEditing ? draftUser : user;
+              const isCurrentUser = user.id === currentUserId;
+              return (
+                <tr key={user.id} className="bg-white">
+                  <td className="border border-line p-2 font-bold">
+                    {isEditing ? (
+                      <input
+                        value={rowUser.name}
+                        onChange={(event) => setDraftUser({ ...rowUser, name: event.target.value })}
+                        className="min-h-10 w-full rounded-md border border-line bg-white px-2 outline-none"
+                      />
+                    ) : (
+                      <span>{user.name}</span>
+                    )}
+                  </td>
+                  <td className="border border-line p-2">
+                    {isEditing ? (
+                      <input
+                        type="email"
+                        value={rowUser.email}
+                        onChange={(event) => setDraftUser({ ...rowUser, email: event.target.value })}
+                        className="min-h-10 w-full rounded-md border border-line bg-white px-2 outline-none"
+                      />
+                    ) : (
+                      <span>{user.email}</span>
+                    )}
+                    {user.id.startsWith("pending-") ? <div className="mt-1 text-xs font-semibold text-orange-700">尚未登入</div> : null}
+                  </td>
+                  <td className="border border-line p-2">
+                    <select
+                      value={rowUser.role}
+                      disabled={!isEditing}
+                      onChange={(event) => setDraftUser({ ...rowUser, role: event.target.value as AppUser["role"] })}
+                      className="min-h-10 rounded-md border border-line bg-white px-2 disabled:opacity-70"
+                    >
+                      <option value="admin">管理者</option>
+                      <option value="user">使用者</option>
+                    </select>
+                  </td>
+                  <td className="border border-line p-2">
+                    <div className="flex flex-wrap gap-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={!rowUser.email.trim() || busyUserId === user.id}
+                            onClick={() => void persistUser(rowUser, user.email)}
+                            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            儲存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUserId(null);
+                              setDraftUser(null);
+                            }}
+                            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+                          >
+                            取消
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingUserId(user.id);
+                            setDraftUser(user);
+                          }}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+                        >
+                          編輯
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={isCurrentUser || busyUserId === user.id}
+                        onClick={() => void removeUser(user)}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 size={16} /> 刪除
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {users.length === 0 ? (
               <tr className="bg-white">
                 <td className="border border-line p-3 text-muted" colSpan={4}>

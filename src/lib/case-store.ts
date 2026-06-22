@@ -49,6 +49,19 @@ type ProjectRow = {
   ci_tilt_measurements?: TiltMeasurementRow[];
 };
 
+type ProfileRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: AppUser["role"];
+};
+
+type AllowedUserRow = {
+  email: string;
+  name: string | null;
+  role: AppUser["role"];
+};
+
 type TargetRow = {
   id: string;
   project_id: string;
@@ -182,8 +195,41 @@ export function appUserFromSupabaseUser(user: User): AppUser {
     id: user.id,
     name: user.user_metadata?.name ?? user.email ?? "Google 使用者",
     email: user.email ?? "",
-    role: "admin",
+    role: "user",
   };
+}
+
+export async function resolveSignedInAppUser(supabase: SupabaseClient, user: User): Promise<AppUser> {
+  const baseUser = appUserFromSupabaseUser(user);
+  const allowedUser = await fetchAllowedUserByEmail(supabase, baseUser.email);
+
+  if (!allowedUser.allowed) {
+    throw new Error("此 Google 帳戶尚未被管理者加入使用者名單。");
+  }
+
+  const nextUser = {
+    ...baseUser,
+    name: allowedUser.user?.name || baseUser.name,
+    role: allowedUser.user?.role ?? baseUser.role,
+  };
+
+  await ensureProfile(supabase, nextUser);
+
+  const { data } = await supabase
+    .from("ci_profiles")
+    .select("id, email, name, role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const profile = data as ProfileRow | null;
+  return profile
+    ? {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name || profile.email,
+        role: profile.role,
+      }
+    : nextUser;
 }
 
 export async function ensureProfile(supabase: SupabaseClient, user: AppUser) {
@@ -199,6 +245,130 @@ export async function ensureProfile(supabase: SupabaseClient, user: AppUser) {
   );
 
   if (error) throw error;
+}
+
+export async function fetchManagedUsers(supabase: SupabaseClient, currentUser: AppUser): Promise<AppUser[]> {
+  const { data: allowedRows, error: allowedError } = await supabase
+    .from("ci_allowed_users")
+    .select("email, name, role")
+    .order("created_at", { ascending: true });
+
+  if (allowedError && !isMissingTableError(allowedError)) throw allowedError;
+
+  const { data: profileRows, error: profileError } = await supabase
+    .from("ci_profiles")
+    .select("id, email, name, role")
+    .order("created_at", { ascending: true });
+
+  if (profileError) throw profileError;
+
+  const profiles = ((profileRows ?? []) as ProfileRow[]).map(profileRowToAppUser);
+  const profileByEmail = new Map(profiles.map((profile) => [profile.email.toLowerCase(), profile]));
+
+  if (allowedError && isMissingTableError(allowedError)) {
+    return profiles.length ? profiles : [currentUser];
+  }
+
+  const allowedUsers = ((allowedRows ?? []) as AllowedUserRow[]).map((row) => {
+    const profile = profileByEmail.get(row.email.toLowerCase());
+    return {
+      id: profile?.id ?? `pending-${row.email.toLowerCase()}`,
+      email: row.email.toLowerCase(),
+      name: row.name || profile?.name || row.email,
+      role: row.role,
+    };
+  });
+
+  return upsertManagedUserList(allowedUsers, currentUser);
+}
+
+export async function saveManagedUser(supabase: SupabaseClient, user: AppUser, previousEmail?: string) {
+  const normalizedEmail = user.email.trim().toLowerCase();
+  const normalizedUser = {
+    ...user,
+    email: normalizedEmail,
+    name: user.name.trim() || normalizedEmail,
+  };
+
+  const { error: allowedError } = await supabase.from("ci_allowed_users").upsert(
+    {
+      email: normalizedUser.email,
+      name: normalizedUser.name,
+      role: normalizedUser.role,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "email" },
+  );
+
+  if (allowedError && !isMissingTableError(allowedError)) throw allowedError;
+
+  if (previousEmail && previousEmail.toLowerCase() !== normalizedUser.email && !(allowedError && isMissingTableError(allowedError))) {
+    const { error } = await supabase.from("ci_allowed_users").delete().eq("email", previousEmail.toLowerCase());
+    if (error) throw error;
+  }
+
+  if (!normalizedUser.id.startsWith("pending-")) {
+    const { error: profileError } = await supabase
+      .from("ci_profiles")
+      .update({
+        email: normalizedUser.email,
+        name: normalizedUser.name,
+        role: normalizedUser.role,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", normalizedUser.id);
+    if (profileError) throw profileError;
+  }
+
+  return normalizedUser;
+}
+
+export async function deleteManagedUser(supabase: SupabaseClient, user: AppUser) {
+  const { error } = await supabase.from("ci_allowed_users").delete().eq("email", user.email.toLowerCase());
+  if (error && !isMissingTableError(error)) throw error;
+}
+
+function profileRowToAppUser(row: ProfileRow): AppUser {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name || row.email,
+    role: row.role,
+  };
+}
+
+async function fetchAllowedUserByEmail(supabase: SupabaseClient, email: string): Promise<{ allowed: boolean; user?: Omit<AppUser, "id"> }> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return { allowed: false };
+
+  const { data, error } = await supabase
+    .from("ci_allowed_users")
+    .select("email, name, role")
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingTableError(error)) return { allowed: true };
+    throw error;
+  }
+
+  if (!data) return { allowed: false };
+  const row = data as AllowedUserRow;
+  return {
+    allowed: true,
+    user: {
+      email: row.email,
+      name: row.name || row.email,
+      role: row.role,
+    },
+  };
+}
+
+function upsertManagedUserList(users: AppUser[], nextUser: AppUser) {
+  if (users.some((user) => user.id === nextUser.id || user.email === nextUser.email)) {
+    return users.map((user) => (user.id === nextUser.id || user.email === nextUser.email ? { ...user, ...nextUser } : user));
+  }
+  return [nextUser, ...users];
 }
 
 export async function fetchInspectionCases(supabase: SupabaseClient, userId: string): Promise<InspectionCase[]> {
