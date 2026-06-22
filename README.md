@@ -65,12 +65,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=你的 Supabase anon key
 
 ## 下一步建議
 
-1. 接 Supabase Auth Google OAuth。
-2. 建立 `profiles` 與 `project_members`，完成管理者/使用者權限。
-3. 將案件、主文章節、附件狀態、附件七/八資料接到 Supabase CRUD。
-4. 加入 Supabase Storage，永久保存照片與上傳 PDF。
+完整規劃見 [docs/product-improvement-plan.md](docs/product-improvement-plan.md)。
+
+1. 優先將案件、主文章節、附件狀態、附件七/八資料接到 Supabase CRUD。
+2. 加入 Supabase Storage，永久保存附件七/八照片與上傳 PDF。
+3. 建立地址快速輸入、批次新增標的物、複製上一戶資料等現場效率功能。
+4. 擴充照片說明語句生成器，支援方位、材料、缺失程度與自訂選項。
 5. 建立完整 PDF 匯出：
    - 封面
    - 目錄，自動計算頁碼
    - 主文
    - 附件一至附件八
+6. 將附件五、附件六從 PDF 上傳槽升級為水準測量與傾斜率測量模組。
