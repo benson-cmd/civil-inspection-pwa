@@ -238,47 +238,95 @@ export default function HomePage() {
 
   if (!currentUser) {
     return (
-      <main className="min-h-screen bg-background px-4 py-6 text-foreground">
+      <main className="flex min-h-screen items-center justify-center bg-[#f0f4f0] p-6 text-foreground">
         <PwaRegister />
-        <section className="mx-auto grid min-h-[calc(100vh-48px)] max-w-3xl place-items-center">
-          <div className="w-full overflow-hidden rounded-lg border border-line bg-paper shadow-[0_18px_45px_rgba(28,25,23,0.10)]">
-            <div className="grid gap-5 border-b border-[#292524] bg-[#1c1917] p-6 text-white md:grid-cols-[1fr_180px] md:p-8">
-              <div>
-                <p className="text-sm font-semibold tracking-[0.2em] text-stone-300">CIVIL INSPECTION REPORT</p>
-                <h1 className="mt-2 text-3xl font-black md:text-4xl">現況鑑定報告系統</h1>
-              </div>
-              <div className="hidden h-32 rounded-md border border-white/15 bg-white/10 p-4 md:block">
-                <div className="mb-3 flex items-center justify-between text-stone-300">
-                  <FileText size={28} />
-                  <span className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-white/72 mono-data">A4</span>
-                </div>
-                <svg viewBox="0 0 180 88" className="h-[72px] w-full" aria-hidden="true">
-                  <rect x="24" y="8" width="132" height="72" rx="4" fill="none" stroke="#d6d3d1" strokeWidth="3" />
-                  <path d="M44 28 H136 M44 43 H136 M44 58 H104" fill="none" stroke="#fafaf6" strokeWidth="3" strokeLinecap="round" />
-                  <path d="M122 61 L136 70 L154 45" fill="none" stroke="#d6d3d1" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+        <div className="w-full max-w-[480px] overflow-hidden rounded-[20px] border border-line bg-paper shadow-sm">
+          <div className="relative bg-[#0d2b1e] px-7 pb-6 pt-7">
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[rgba(82,183,136,0.3)] bg-[rgba(82,183,136,0.18)] px-3 py-1 text-[10px] font-medium uppercase tracking-widest text-[#52b788]">
+              <FileText size={11} />
+              Civil Inspection Report
             </div>
-            <div className="p-6 md:p-8">
-              {supabaseEnabled ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={signInWithGoogle}
-                    className="inline-flex min-h-12 items-center gap-2 rounded-md bg-accent px-5 text-base font-bold text-white shadow-sm"
-                  >
-                    <LogIn size={20} /> 使用 Google 帳戶登入
-                  </button>
-                  {authError ? <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">{authError}</p> : null}
-                </>
-              ) : (
-                <div className="mt-6 rounded-md border border-line bg-[#f5f5f4] p-4 text-sm text-accent">
-                  尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
-                </div>
-              )}
+            <h1 className="mb-1 text-[28px] font-medium leading-tight text-[#f0faf4]">
+              現況鑑定
+              <br />
+              報告系統
+            </h1>
+            <p className="text-[12px] leading-relaxed text-[rgba(240,250,244,0.45)]">
+              土木技師 · 鄰房現況調查
+            </p>
+            <div className="absolute right-6 top-1/2 flex h-[60px] w-[60px] -translate-y-1/2 items-center justify-center rounded-[14px] border border-[rgba(82,183,136,0.2)] bg-[rgba(45,106,79,0.25)] text-[#52b788]">
+              <Building2 size={26} />
             </div>
           </div>
-        </section>
+
+          <div className="px-7 pb-7 pt-6">
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              {[
+                { icon: <Home size={15} />, label: "照片點位標記", desc: "平面圖直覺操作", delay: "0.3s" },
+                { icon: <FileText size={15} />, label: "PDF 一鍵匯出", desc: "自動生成報告附件", delay: "0.48s" },
+                { icon: <ClipboardList size={15} />, label: "iPad 現場適用", desc: "觸控優化介面", delay: "0.66s" },
+                { icon: <Building2 size={15} />, label: "雲端同步", desc: "多裝置資料共用", delay: "0.84s" },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-start gap-2 rounded-xl bg-surface-soft p-3"
+                  style={{
+                    opacity: 0,
+                    animation: "fadeUp 0.4s ease forwards",
+                    animationDelay: item.delay,
+                  }}
+                >
+                  <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[rgba(45,106,79,0.1)] text-accent">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-medium leading-snug">{item.label}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-muted">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-4 flex items-center gap-2">
+              <div className="h-px flex-1 bg-line" />
+              <span className="whitespace-nowrap text-[11px] text-muted">使用 Google 帳號登入</span>
+              <div className="h-px flex-1 bg-line" />
+            </div>
+
+            {supabaseEnabled ? (
+              <>
+                <button
+                  type="button"
+                  onClick={signInWithGoogle}
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2.5 rounded-xl bg-accent px-5 text-[15px] font-medium text-white transition-colors hover:bg-[#245a42]"
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853" />
+                    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+                  </svg>
+                  使用 Google 帳戶登入
+                </button>
+                {authError ? (
+                  <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">
+                    {authError}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div className="mt-6 rounded-md border border-line bg-[#f5f5f4] p-4 text-sm text-accent">
+                尚未設定 Supabase 環境變數，請先設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
+              </div>
+            )}
+
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-muted">
+              登入即表示您同意本系統僅供授權技師使用
+              <br />
+              資料依 Supabase 儲存於安全雲端環境
+            </p>
+          </div>
+        </div>
       </main>
     );
   }
@@ -290,36 +338,38 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-background px-4 py-4 text-foreground md:px-6 lg:px-8">
       <PwaRegister />
-      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#292524] bg-[#1c1917] p-4 text-white shadow-sm">
+      <header className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-lg border border-[#1a3d2b] bg-[#0d2b1e] px-5 py-3 text-white shadow-sm">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-stone-300">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#52b788]">
             {activeView === "users" ? "ADMIN CONSOLE" : "REPORT WORKSPACE"}
           </p>
-          <h1 className="text-2xl font-black text-white md:text-3xl">
+          <h1 className="text-2xl font-medium text-[#f0faf4] md:text-3xl">
             {activeView === "users" ? "使用者管理" : "現況鑑定報告系統"}
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(82,183,136,0.3)] bg-[rgba(82,183,136,0.15)] px-3 py-1.5 text-sm font-medium text-[#52b788]">
             {currentUser.name} / {currentUser.role === "admin" ? "管理者" : "使用者"}
           </span>
           {currentUser.role === "admin" ? (
             <button
               type="button"
               onClick={() => setActiveView((current) => (current === "users" ? "workspace" : "users"))}
-              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-                activeView === "users" ? "border-stone-200 bg-stone-200 text-stone-950" : "border-white/20 bg-white/10 text-white"
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                activeView === "users"
+                  ? "border-[rgba(82,183,136,0.5)] bg-[rgba(82,183,136,0.2)] text-[#52b788]"
+                  : "border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.07)] text-[rgba(240,250,244,0.7)] hover:bg-[rgba(255,255,255,0.12)]"
               }`}
             >
-              <Users size={18} /> {activeView === "users" ? "報告工作台" : "使用者管理"}
+              <Users size={16} /> {activeView === "users" ? "報告工作台" : "使用者管理"}
             </button>
           ) : null}
           <button
             type="button"
             onClick={signOut}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-white/20 bg-white/10 px-3 text-sm font-semibold text-white"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.07)] px-3 text-sm font-medium text-[rgba(240,250,244,0.7)] transition-colors hover:bg-[rgba(255,255,255,0.12)]"
           >
-            <LogIn size={18} /> 切換帳號
+            <LogIn size={16} /> 切換帳號
           </button>
         </div>
       </header>
@@ -403,26 +453,28 @@ export default function HomePage() {
 
           <section className="min-w-0">
             <CaseHeader activeCase={activeCase} onChange={updateCase} />
-            <nav className="workspace-panel mb-4 flex flex-wrap gap-2 rounded-lg border border-line bg-paper p-2 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
-              {workspaceTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`relative min-h-11 rounded-md px-3 text-sm font-bold ${
-                    activeTab === tab.id
-                      ? "bg-accent text-white"
-                      : tab.available
-                        ? "bg-white text-foreground"
-                        : "bg-white text-gray-400"
-                  }`}
-                >
-                  {tab.label}
-                  {!tab.available ? (
-                    <span className="ml-1 rounded bg-gray-200 px-1 text-xs text-gray-500">待開發</span>
-                  ) : null}
-                </button>
-              ))}
+            <nav className="workspace-panel mb-4 overflow-x-auto rounded-lg border border-[#1a3d2b] bg-[#0f3322] shadow-sm">
+              <div className="flex min-w-max">
+                {workspaceTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex min-h-[44px] flex-shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-4 text-[13px] font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? "border-[#52b788] text-[#52b788]"
+                        : "border-transparent text-[rgba(240,250,244,0.45)] hover:text-[rgba(240,250,244,0.7)]"
+                    }`}
+                  >
+                    {tab.label}
+                    {!tab.available ? (
+                      <span className="rounded bg-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[9px] text-[rgba(240,250,244,0.3)]">
+                        待開發
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
             </nav>
 
             {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
