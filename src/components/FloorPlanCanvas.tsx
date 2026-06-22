@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent, TouchEvent } from "react";
 import { Eraser, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
 import type { InspectionPoint, NoEntryZone } from "@/types/inspection";
 import { PhotoPointMarker } from "./PhotoPointMarker";
 
 interface FloorPlanCanvasProps {
+  activeMode?: Mode;
   points: InspectionPoint[];
   activePointId?: string;
   planPaths: string[];
@@ -18,13 +19,16 @@ interface FloorPlanCanvasProps {
   onSelectPoint: (pointId: string) => void;
   onClearPlan: () => void;
   onUndoPlan: () => void;
+  onModeChange?: (mode: Mode) => void;
 }
 
-type Mode = "draw" | "line" | "erase" | "photo" | "move" | "noEntry";
+export type FloorPlanMode = "draw" | "line" | "erase" | "photo" | "move" | "noEntry";
+type Mode = FloorPlanMode;
 
 const viewBox = { width: 900, height: 620 };
 
 export function FloorPlanCanvas({
+  activeMode,
   points,
   activePointId,
   planPaths,
@@ -36,6 +40,7 @@ export function FloorPlanCanvas({
   onSelectPoint,
   onClearPlan,
   onUndoPlan,
+  onModeChange,
 }: FloorPlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [mode, setMode] = useState<Mode>("line");
@@ -47,6 +52,15 @@ export function FloorPlanCanvas({
   const [draggingNoEntryCorner, setDraggingNoEntryCorner] = useState<{ zoneId: string; cornerIndex: number } | null>(null);
 
   const allPaths = useMemo(() => (draftPath ? [...planPaths, draftPath] : planPaths), [draftPath, planPaths]);
+
+  useEffect(() => {
+    if (activeMode && activeMode !== mode) setMode(activeMode);
+  }, [activeMode, mode]);
+
+  function changeMode(nextMode: Mode) {
+    setMode(nextMode);
+    onModeChange?.(nextMode);
+  }
 
   function getSvgPoint(event: PointerEvent<SVGSVGElement> | PointerEvent<SVGGElement>) {
     return getSvgPointFromClient(event.clientX, event.clientY);
@@ -223,7 +237,7 @@ export function FloorPlanCanvas({
             <span className="text-xs font-bold text-muted">繪圖</span>
             <button
               type="button"
-              onClick={() => setMode("draw")}
+              onClick={() => changeMode("draw")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "draw" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}
@@ -232,7 +246,7 @@ export function FloorPlanCanvas({
             </button>
             <button
               type="button"
-              onClick={() => setMode("line")}
+              onClick={() => changeMode("line")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "line" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}
@@ -241,7 +255,7 @@ export function FloorPlanCanvas({
             </button>
             <button
               type="button"
-              onClick={() => setMode("noEntry")}
+              onClick={() => changeMode("noEntry")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "noEntry" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}
@@ -267,7 +281,7 @@ export function FloorPlanCanvas({
             <span className="text-xs font-bold text-muted">操作</span>
             <button
               type="button"
-              onClick={() => setMode("photo")}
+              onClick={() => changeMode("photo")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "photo" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}
@@ -276,7 +290,7 @@ export function FloorPlanCanvas({
             </button>
             <button
               type="button"
-              onClick={() => setMode("move")}
+              onClick={() => changeMode("move")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "move" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}
@@ -285,7 +299,7 @@ export function FloorPlanCanvas({
             </button>
             <button
               type="button"
-              onClick={() => setMode("erase")}
+              onClick={() => changeMode("erase")}
               className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
                 mode === "erase" ? "border-accent bg-accent text-white" : "border-line bg-white"
               }`}

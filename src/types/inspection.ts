@@ -126,6 +126,7 @@ export interface InspectionCase {
   id: string;
   project: Project;
   target: Target;
+  sitePhotos?: SitePhoto[];
   attachmentSeven?: AttachmentSevenData;
   reportSections: ReportSection[];
   attachments: AttachmentSlot[];

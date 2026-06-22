@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, Upload } from "lucide-react";
+import { LocateFixed, Plus, Trash2, Upload } from "lucide-react";
 import type { ComponentType, ConditionType, InspectionPoint } from "@/types/inspection";
 import { buildPhotoCaption } from "@/lib/caption";
 
@@ -21,13 +21,20 @@ interface InspectionFormProps {
   point?: InspectionPoint;
   onChange: (point: InspectionPoint) => void;
   onDelete: (pointId: string) => void;
+  onContinue: () => void;
 }
 
-export function InspectionForm({ point, onChange, onDelete }: InspectionFormProps) {
+export function InspectionForm({ point, onChange, onDelete, onContinue }: InspectionFormProps) {
   if (!point) {
     return (
-      <aside className="rounded-lg border border-dashed border-line bg-paper p-5 text-muted">
-        點選平面圖新增或選取照片點位後，這裡會顯示該照片的紀錄表。
+      <aside className="grid min-h-72 place-items-center rounded-lg border border-dashed border-line bg-paper p-6 text-center text-muted">
+        <div>
+          <LocateFixed size={56} className="mx-auto mb-4 opacity-40" />
+          <h2 className="mb-2 text-lg font-bold text-foreground">尚未選取照片點位</h2>
+          <p className="mx-auto max-w-xs text-sm leading-6">
+            在平面圖切換到「照片點位」模式後，點選要記錄的位置；或點選下方照片紀錄表的任一列來選取。
+          </p>
+        </div>
       </aside>
     );
   }
@@ -92,6 +99,13 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
           >
             <Trash2 size={18} /> 刪除
           </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+          >
+            <Plus size={18} /> 下一個點
+          </button>
         </div>
       </div>
       <p className="mb-4 rounded-md bg-[#f5f5f4] p-3 text-sm text-muted">
@@ -150,6 +164,7 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
           <span className="mb-1 block text-sm font-semibold">裂縫寬度 mm</span>
           <input
             type="number"
+            inputMode="decimal"
             step="0.1"
             min="0"
             value={point.crackWidthMm ?? ""}

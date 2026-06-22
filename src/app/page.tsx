@@ -18,6 +18,9 @@ import {
   Users,
 } from "lucide-react";
 import { FloorPlanCanvas, serializePlanToSvg } from "@/components/FloorPlanCanvas";
+import type { FloorPlanMode } from "@/components/FloorPlanCanvas";
+import { AttachmentFiveEditor } from "@/components/AttachmentFiveEditor";
+import { AttachmentSixEditor } from "@/components/AttachmentSixEditor";
 import { InspectionForm } from "@/components/InspectionForm";
 import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
@@ -364,8 +367,8 @@ export default function HomePage() {
             {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
-            {activeTab === "attachment5" ? <AttachmentPlaceholder no={5} title="水準測量" description="附件五將建立測量成果資料輸入、PDF 上傳與報告合併功能。" /> : null}
-            {activeTab === "attachment6" ? <AttachmentPlaceholder no={6} title="傾斜率測量" description="附件六將建立傾斜率測量成果資料輸入、照片或 PDF 上傳與報告合併功能。" /> : null}
+            {activeTab === "attachment5" ? <AttachmentFiveEditor /> : null}
+            {activeTab === "attachment6" ? <AttachmentSixEditor /> : null}
             {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
@@ -853,6 +856,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   );
   const [points, setPoints] = useState<InspectionPoint[]>(() => activeCase.attachmentSeven?.points ?? []);
   const [activePointId, setActivePointId] = useState<string | undefined>();
+  const [floorPlanMode, setFloorPlanMode] = useState<FloorPlanMode>("line");
 
   const project = activeCase.project;
   const target = targets.find((item) => item.id === activeTargetId) ?? targets[0] ?? activeCase.target;
@@ -874,6 +878,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     setActiveFloorName("1F");
     setNewFloorName("");
     setActivePointId(undefined);
+    setFloorPlanMode("line");
   }, [activeCase.id]);
 
   const floors: Floor[] = useMemo(
@@ -1048,6 +1053,13 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     const nextPoints = points.map((point) => (point.id === nextPoint.id ? nextPoint : point));
     setPoints(nextPoints);
     persistAttachmentSeven({ points: nextPoints });
+  }
+
+  function deletePoint(pointId: string) {
+    const nextPoints = points.filter((point) => point.id !== pointId);
+    setPoints(nextPoints);
+    persistAttachmentSeven({ points: nextPoints });
+    if (activePointId === pointId) setActivePointId(undefined);
   }
 
   function attachPhotoToPoint(point: InspectionPoint, file: File) {
@@ -1228,6 +1240,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           </div>
 
           <FloorPlanCanvas
+            activeMode={floorPlanMode}
             points={floorPoints}
             activePointId={activePointId}
             planPaths={activePlanPaths}
@@ -1241,6 +1254,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
               updatePoint({ ...movingPoint, x: position.x, y: position.y });
             }}
             onSelectPoint={setActivePointId}
+            onModeChange={setFloorPlanMode}
             onClearPlan={() => updateActivePlan([])}
             onUndoPlan={() => {
               const zones = activeNoEntryZones;
@@ -1265,6 +1279,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                     <th className="border border-line p-2">裂縫寬(mm)</th>
                     <th className="border border-line p-2">照片</th>
                     <th className="border border-line p-2">備註</th>
+                    <th className="border border-line p-2">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1298,6 +1313,19 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                         </label>
                       </td>
                       <td className="border border-line p-2">{point.note}</td>
+                      <td className="border border-line p-2">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            deletePoint(point.id);
+                          }}
+                          className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-white px-2 text-muted"
+                          aria-label={`刪除照片點位 ${point.photoNo}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1309,12 +1337,8 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
         <InspectionForm
           point={activePoint}
           onChange={updatePoint}
-          onDelete={(pointId) => {
-            const nextPoints = points.filter((point) => point.id !== pointId);
-            setPoints(nextPoints);
-            persistAttachmentSeven({ points: nextPoints });
-            setActivePointId(undefined);
-          }}
+          onDelete={deletePoint}
+          onContinue={() => setFloorPlanMode("photo")}
         />
       </section>
 
@@ -1333,8 +1357,17 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   );
 }
 
-function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
-  const [sitePhotos, setSitePhotos] = useState<SitePhoto[]>([]);
+function AttachmentEightEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  const [sitePhotos, setSitePhotos] = useState<SitePhoto[]>(() => activeCase.sitePhotos ?? []);
+
+  useEffect(() => {
+    setSitePhotos(activeCase.sitePhotos ?? []);
+  }, [activeCase.id, activeCase.sitePhotos]);
+
+  function persistSitePhotos(nextPhotos: SitePhoto[]) {
+    setSitePhotos(nextPhotos);
+    onChange({ ...activeCase, sitePhotos: nextPhotos });
+  }
 
   return (
     <section className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
@@ -1354,8 +1387,8 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
               const file = event.target.files?.[0];
               if (!file) return;
               const photoNo = `基地-${String(sitePhotos.length + 1).padStart(2, "0")}`;
-              setSitePhotos((current) => [
-                ...current,
+              persistSitePhotos([
+                ...sitePhotos,
                 {
                   id: crypto.randomUUID(),
                   photoNo,
@@ -1377,7 +1410,7 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
               <strong>{photo.photoNo}</strong>
               <button
                 type="button"
-                onClick={() => setSitePhotos((current) => current.filter((item) => item.id !== photo.id))}
+                onClick={() => persistSitePhotos(sitePhotos.filter((item) => item.id !== photo.id))}
                 className="rounded-md border border-accent px-3 py-2 text-sm font-semibold text-accent"
               >
                 刪除
@@ -1388,7 +1421,7 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
               label="說明"
               value={photo.caption}
               onChange={(caption) =>
-                setSitePhotos((current) => current.map((item) => (item.id === photo.id ? { ...item, caption } : item)))
+                persistSitePhotos(sitePhotos.map((item) => (item.id === photo.id ? { ...item, caption } : item)))
               }
             />
           </article>
@@ -1710,6 +1743,7 @@ function AddressBuilder({
             巷 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Lane</span>
           </span>
           <input
+            inputMode="numeric"
             value={lane}
             onChange={(event) => {
               const nextLane = event.target.value.replace(/[^\dA-Za-z-]/g, "");
@@ -1725,6 +1759,7 @@ function AddressBuilder({
             弄 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Alley</span>
           </span>
           <input
+            inputMode="numeric"
             value={alley}
             onChange={(event) => {
               const nextAlley = event.target.value.replace(/[^\dA-Za-z-]/g, "");
@@ -1740,6 +1775,7 @@ function AddressBuilder({
             號樓 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">No./Floor</span>
           </span>
           <input
+            inputMode="numeric"
             value={numberAndFloor}
             onChange={(event) => {
               const nextNumberAndFloor = event.target.value;
