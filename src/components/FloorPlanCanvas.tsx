@@ -27,8 +27,8 @@ export type FloorPlanMode = "draw" | "line" | "erase" | "photo" | "move" | "noEn
 type Mode = FloorPlanMode;
 
 const viewBox = { width: 900, height: 620 };
-const photoPressDelayMs = 180;
-const photoPressMoveTolerance = 14;
+const photoTouchPressDelayMs = 70;
+const photoPressMoveTolerance = 34;
 
 export function FloorPlanCanvas({
   activeMode,
@@ -55,7 +55,12 @@ export function FloorPlanCanvas({
   const [rotatingPointId, setRotatingPointId] = useState<string | null>(null);
   const [snapLine, setSnapLine] = useState(false);
   const [draggingNoEntryCorner, setDraggingNoEntryCorner] = useState<{ zoneId: string; cornerIndex: number } | null>(null);
-  const pendingPhotoPointRef = useRef<{ point: { x: number; y: number }; pointerId: number; startedAt: number } | null>(null);
+  const pendingPhotoPointRef = useRef<{
+    point: { x: number; y: number };
+    pointerId: number;
+    pointerType: string;
+    startedAt: number;
+  } | null>(null);
 
   const allPaths = useMemo(() => (draftPath ? [...planPaths, draftPath] : planPaths), [draftPath, planPaths]);
 
@@ -89,6 +94,7 @@ export function FloorPlanCanvas({
       pendingPhotoPointRef.current = {
         point,
         pointerId: event.pointerId,
+        pointerType: event.pointerType,
         startedAt: performance.now(),
       };
       return;
@@ -163,7 +169,8 @@ export function FloorPlanCanvas({
       const pending = pendingPhotoPointRef.current;
       pendingPhotoPointRef.current = null;
       const releasedPoint = getSvgPoint(event);
-      const heldLongEnough = performance.now() - pending.startedAt >= photoPressDelayMs;
+      const minPressDelay = pending.pointerType === "touch" ? photoTouchPressDelayMs : 0;
+      const heldLongEnough = performance.now() - pending.startedAt >= minPressDelay;
       const stayedInPlace = distance(pending.point, releasedPoint) <= photoPressMoveTolerance;
       if (pending.pointerId === event.pointerId && heldLongEnough && stayedInPlace) {
         onAddPoint(pending.point);
@@ -426,7 +433,7 @@ export function FloorPlanCanvas({
           <Eraser size={16} /> 橡皮擦模式可點選單一筆線條或 X 區域刪除。
         </div>
         <div className="inline-flex items-center gap-2">
-          <RotateCw size={16} /> 照片點位需按住約 0.2 秒再放開；選取點位後可拖曳紅色箭頭端點微調方向。
+          <RotateCw size={16} /> 照片點位輕按停一下再放開即可新增；選取點位後可拖曳紅色箭頭端點微調方向。
         </div>
       </div>
     </section>
