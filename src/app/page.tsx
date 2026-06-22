@@ -5,6 +5,9 @@ import type { ReactNode } from "react";
 import {
   Building2,
   CalendarDays,
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
   ClipboardList,
   FileText,
   Home,
@@ -57,8 +60,14 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("basic");
   const [activeView, setActiveView] = useState<AppView>("workspace");
   const [managedUsers, setManagedUsers] = useState<AppUser[]>([]);
+  const [caseSearch, setCaseSearch] = useState("");
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
+  const filteredCases = cases.filter(
+    (item) =>
+      item.project.caseNo.includes(caseSearch) ||
+      item.project.projectName.includes(caseSearch),
+  );
   const supabaseEnabled = hasSupabaseEnv();
 
   useEffect(() => {
@@ -290,8 +299,15 @@ export default function HomePage() {
                 <Plus size={16} /> 新增
               </button>
             </div>
+            <input
+              type="search"
+              placeholder="搜尋案件編號或名稱"
+              value={caseSearch}
+              onChange={(event) => setCaseSearch(event.target.value)}
+              className="mb-3 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none"
+            />
             <div className="grid gap-2">
-              {cases.map((item) => (
+              {filteredCases.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -303,11 +319,21 @@ export default function HomePage() {
                     item.id === activeCase.id ? "border-accent bg-[#f5f5f4]" : "border-line bg-white"
                   }`}
                 >
-                  <span className="mono-data block font-bold">{item.project.caseNo}</span>
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="mono-data block font-bold">{item.project.caseNo}</span>
+                    <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${reportStatusBadgeClass(item.project.reportStatus ?? "草稿")}`}>
+                      {item.project.reportStatus ?? "草稿"}
+                    </span>
+                  </span>
                   <span className="block text-sm text-muted">{item.project.projectName}</span>
                   <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
                 </button>
               ))}
+              {filteredCases.length === 0 ? (
+                <div className="rounded-md border border-dashed border-line bg-white p-3 text-sm text-muted">
+                  找不到符合的案件。
+                </div>
+              ) : null}
             </div>
           </aside>
 
@@ -319,11 +345,18 @@ export default function HomePage() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`min-h-11 rounded-md px-3 text-sm font-bold ${
-                    activeTab === tab.id ? "bg-accent text-white" : "bg-white"
+                  className={`relative min-h-11 rounded-md px-3 text-sm font-bold ${
+                    activeTab === tab.id
+                      ? "bg-accent text-white"
+                      : tab.available
+                        ? "bg-white text-foreground"
+                        : "bg-white text-gray-400"
                   }`}
                 >
                   {tab.label}
+                  {!tab.available ? (
+                    <span className="ml-1 rounded bg-gray-200 px-1 text-xs text-gray-500">待開發</span>
+                  ) : null}
                 </button>
               ))}
             </nav>
@@ -343,15 +376,15 @@ export default function HomePage() {
   );
 }
 
-const workspaceTabs: Array<{ id: WorkspaceTab; label: string }> = [
-  { id: "basic", label: "基本資料" },
-  { id: "main", label: "封面/目錄/主文" },
-  { id: "attachments", label: "附件管理" },
-  { id: "attachment5", label: "附件五" },
-  { id: "attachment6", label: "附件六" },
-  { id: "attachment7", label: "附件七" },
-  { id: "attachment8", label: "附件八" },
-  { id: "export", label: "匯出報告" },
+const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean }> = [
+  { id: "basic", label: "基本資料", available: true },
+  { id: "main", label: "封面/目錄/主文", available: true },
+  { id: "attachments", label: "附件管理", available: true },
+  { id: "attachment5", label: "附件五 水準測量", available: false },
+  { id: "attachment6", label: "附件六 傾斜率", available: false },
+  { id: "attachment7", label: "附件七 現況照片", available: true },
+  { id: "attachment8", label: "附件八 基地照片", available: true },
+  { id: "export", label: "匯出報告", available: true },
 ];
 
 function upsertManagedUser(users: AppUser[], nextUser: AppUser) {
@@ -391,6 +424,14 @@ function formatEngineerNames(project: Project) {
     .map((engineer) => engineer.name.trim())
     .filter(Boolean)
     .join("、");
+}
+
+function reportStatusBadgeClass(status: ReportStatus) {
+  if (status === "審閱中") return "bg-blue-100 text-blue-700";
+  if (status === "待補件") return "bg-orange-100 text-orange-700";
+  if (status === "完稿") return "bg-green-100 text-green-700";
+  if (status === "已歸檔") return "bg-stone-100 text-stone-500";
+  return "bg-gray-100 text-gray-600";
 }
 
 function formatRocDate(date: string | undefined) {
@@ -1108,8 +1149,8 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
                 key={option}
                 className={`flex min-h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-semibold ${
                   target.surveyStatus.split("、").includes(option)
-                    ? "border-accent bg-accent text-white"
-                    : "border-line bg-white"
+                    ? "border-orange-400 bg-orange-50 text-orange-700"
+                    : "border-line bg-white text-foreground hover:border-orange-200 hover:bg-orange-50/50"
                 }`}
               >
                 <input
@@ -1362,20 +1403,91 @@ function AttachmentEightEditor({ activeCase }: { activeCase: InspectionCase; onC
 }
 
 function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
+  const engineers = getProjectEngineers(activeCase.project);
+  const checklist = [
+    {
+      id: "case-no",
+      status: activeCase.project.caseNo.trim() ? "complete" : "missing",
+      text: "案件編號已填寫",
+      hint: "請先在基本資料填寫案件編號。",
+    },
+    {
+      id: "engineer",
+      status: engineers.some((engineer) => engineer.name.trim()) ? "complete" : "missing",
+      text: "鑑定技師已填寫",
+      hint: "請至少填寫一位鑑定技師姓名。",
+    },
+    {
+      id: "final-date",
+      status: activeCase.project.finalDate ? "complete" : "missing",
+      text: "完稿日期已填寫",
+      hint: "請在基本資料填寫完稿日期。",
+    },
+    {
+      id: "attachment-seven",
+      status: (activeCase.attachmentSeven?.points.length ?? 0) > 0 ? "complete" : "missing",
+      text: "附件七已有照片點位",
+      hint: "請在附件七至少建立一個照片點位。",
+    },
+  ] satisfies Array<{ id: string; status: "complete" | "missing"; text: string; hint: string }>;
+  const completedCount = checklist.filter((item) => item.status === "complete").length;
+  const progress = Math.round((completedCount / checklist.length) * 100);
+
   return (
     <div className="grid gap-4">
-      <Panel title="完整報告匯出流程" icon={<FileText size={18} />}>
-        <ol className="grid gap-2 text-sm">
-          <li className="rounded-md border border-line bg-white p-3">1. 封面：由基本資料自動生成。</li>
-          <li className="rounded-md border border-line bg-white p-3">2. 目錄：正式 PDF 匯出時計算頁碼。</li>
-          <li className="rounded-md border border-line bg-white p-3">3. 主文：固定章節標題，內容可編輯。</li>
-          <li className="rounded-md border border-line bg-white p-3">4. 附件：上傳 PDF 與系統編輯附件合併。</li>
-        </ol>
+      <Panel title="匯出前完成度檢查" icon={<FileText size={18} />}>
+        <div className="mb-4">
+          <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-semibold">目前完成度</span>
+            <span className="mono-data font-bold text-accent">{progress}%</span>
+          </div>
+          <div className="h-3 overflow-hidden rounded-full bg-stone-200">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+        <div className="grid gap-2 text-sm">
+          {checklist.map((item) => (
+            <ChecklistItem key={item.id} status={item.status} text={item.text} hint={item.hint} />
+          ))}
+          <ChecklistItem
+            status="warning"
+            text="附件八基地照片需於附件八畫面確認"
+            hint="基地照片目前由附件八編輯區管理，這裡先提示，不做實際完成度判斷。"
+          />
+        </div>
       </Panel>
       <Panel title="目前可匯出" icon={<FileText size={18} />}>
         <p className="mb-3 text-sm text-muted">目前先保留附件七/八 HTML to PDF 匯出。完整報告 PDF 需要下一階段加入封面/目錄/主文模板與附件 PDF 合併。</p>
         <PdfExportButton project={activeCase.project} target={activeCase.target} floors={[]} points={[]} sitePhotos={[]} />
       </Panel>
+    </div>
+  );
+}
+
+function ChecklistItem({
+  status,
+  text,
+  hint,
+}: {
+  status: "complete" | "warning" | "missing";
+  text: string;
+  hint: string;
+}) {
+  const Icon = status === "complete" ? CheckCircle2 : status === "warning" ? AlertTriangle : Circle;
+  const colorClass =
+    status === "complete"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : status === "warning"
+        ? "border-orange-100 bg-orange-50 text-orange-700"
+        : "border-line bg-white text-muted";
+
+  return (
+    <div className={`flex items-start gap-3 rounded-md border p-3 ${colorClass}`}>
+      <Icon size={18} className="mt-0.5 shrink-0" />
+      <div>
+        <div className="font-semibold">{text}</div>
+        <div className="mt-1 text-xs opacity-80">{hint}</div>
+      </div>
     </div>
   );
 }

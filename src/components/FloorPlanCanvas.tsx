@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { PointerEvent, TouchEvent } from "react";
-import { Camera, Eraser, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
+import { Eraser, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
 import type { InspectionPoint, NoEntryZone } from "@/types/inspection";
 import { PhotoPointMarker } from "./PhotoPointMarker";
 
@@ -197,96 +197,107 @@ export function FloorPlanCanvas({
           <h2 className="text-lg font-bold">平面圖與照片位置</h2>
           <p className="text-sm text-muted">先畫示意格局，再切換「照片點位」點選拍照位置。</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setMode("draw")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "draw" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <Pencil size={18} /> 自由手繪
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("line")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "line" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <Slash size={18} /> 直線/斜線
-          </button>
-          <button
-            type="button"
-            onClick={() => setSnapLine((current) => !current)}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              snapLine ? "border-accent bg-[#f5f5f4] text-accent" : "border-line bg-white"
-            }`}
-          >
-            <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("erase")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "erase" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <Eraser size={18} /> 橡皮擦
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("noEntry")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "noEntry" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <X size={18} /> 不便進入
-          </button>
-          <label className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold">
-            X角度
-            <input
-              type="range"
-              min="-80"
-              max="80"
-              value={noEntryAngle}
-              onChange={(event) => setNoEntryAngle(Number(event.target.value))}
-              className="w-24 accent-[var(--accent)]"
-            />
-            <span className="w-9 text-right text-muted">{noEntryAngle}°</span>
-          </label>
-          <button
-            type="button"
-            onClick={() => setMode("photo")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "photo" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <LocateFixed size={18} /> 照片點位
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("move")}
-            className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-              mode === "move" ? "border-accent bg-accent text-white" : "border-line bg-white"
-            }`}
-          >
-            <Move size={18} /> 移動點位
-          </button>
-          <button
-            type="button"
-            onClick={onClearPlan}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
-          >
-            <Eraser size={18} /> 全部清空
-          </button>
-          <button
-            type="button"
-            onClick={onUndoPlan}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
-          >
-            <RotateCcw size={18} /> 復原上一步
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-2">
+            <span className="text-xs font-bold text-muted">繪圖</span>
+            <button
+              type="button"
+              onClick={() => setMode("draw")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "draw" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <Pencil size={18} /> 自由手繪
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("line")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "line" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <Slash size={18} /> 直線/斜線
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("noEntry")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "noEntry" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <X size={18} /> 不便進入
+            </button>
+          </div>
+          <div className="h-8 w-px self-center bg-line mx-1" />
+          <div className="flex flex-nowrap items-center gap-2">
+            <span className="text-xs font-bold text-muted">輔助</span>
+            <button
+              type="button"
+              onClick={() => setSnapLine((current) => !current)}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                snapLine ? "border-accent bg-[#f5f5f4] text-accent" : "border-line bg-white"
+              }`}
+            >
+              <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
+            </button>
+            <label className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold">
+              X角度
+              <input
+                type="range"
+                min="-80"
+                max="80"
+                value={noEntryAngle}
+                onChange={(event) => setNoEntryAngle(Number(event.target.value))}
+                className="w-20 accent-[var(--accent)]"
+              />
+              <span className="w-9 text-right text-muted">{noEntryAngle}°</span>
+            </label>
+          </div>
+          <div className="h-8 w-px self-center bg-line mx-1" />
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
+            <span className="text-xs font-bold text-muted">操作</span>
+            <button
+              type="button"
+              onClick={() => setMode("photo")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "photo" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <LocateFixed size={18} /> 照片點位
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("move")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "move" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <Move size={18} /> 移動點位
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("erase")}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                mode === "erase" ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              <Eraser size={18} /> 橡皮擦
+            </button>
+            <button
+              type="button"
+              onClick={onUndoPlan}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            >
+              <RotateCcw size={18} /> 復原上一步
+            </button>
+            <button
+              type="button"
+              onClick={onClearPlan}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            >
+              <Eraser size={18} /> 全部清空
+            </button>
+          </div>
         </div>
       </div>
 

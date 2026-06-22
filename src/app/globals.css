@@ -6,7 +6,15 @@
   --muted: #78716c;
   --paper: #fffefa;
   --line: rgba(214, 211, 209, 0.72);
-  --accent: #44403c;
+  --warning: #e07a2f;
+  --warning-light: #fef3c7;
+  --warning-text: #92400e;
+  --danger: #c0392b;
+  --danger-light: #fee2e2;
+  --info: #1a6fa8;
+  --info-light: #dbeafe;
+  --accent: #2d6a4f;
+  --accent-light: #52b788;
   --accent-dark: #1c1917;
   --ink: #1c1917;
   --surface-soft: #f7f3ed;

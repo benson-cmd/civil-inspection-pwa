@@ -6,6 +6,16 @@ import { buildPhotoCaption } from "@/lib/caption";
 
 const componentOptions: ComponentType[] = ["全景", "牆面", "平頂", "地坪", "梁", "柱", "其他"];
 const conditionOptions: ConditionType[] = ["現況", "裂縫", "滲水", "剝落", "其他"];
+const directionOptions = [
+  { label: "N", angle: 0 },
+  { label: "NE", angle: 45 },
+  { label: "E", angle: 90 },
+  { label: "SE", angle: 135 },
+  { label: "S", angle: 180 },
+  { label: "SW", angle: 225 },
+  { label: "W", angle: 270 },
+  { label: "NW", angle: 315 },
+];
 
 interface InspectionFormProps {
   point?: InspectionPoint;
@@ -88,18 +98,24 @@ export function InspectionForm({ point, onChange, onDelete }: InspectionFormProp
         上傳方式：按「拍照/上傳」後，iPad Safari 會跳出「拍照」或「照片圖庫」；目前先暫存在瀏覽器預覽，接 Supabase Storage 後才會永久保存。
       </p>
 
-      <label className="mb-4 block">
+      <div className="mb-4">
         <span className="mb-1 block text-sm font-semibold">拍攝方向角度</span>
-        <input
-          type="range"
-          min="0"
-          max="359"
-          value={point.directionAngle}
-          onChange={(event) => onChange({ ...point, directionAngle: Number(event.target.value) })}
-          className="w-full accent-[var(--accent)]"
-        />
-        <span className="text-sm text-muted">{point.directionAngle}°</span>
-      </label>
+        <div className="grid grid-cols-4 gap-2">
+          {directionOptions.map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => onChange({ ...point, directionAngle: option.angle })}
+              className={`mono-data flex min-h-10 flex-1 items-center justify-center rounded-md border text-sm font-bold ${
+                point.directionAngle === option.angle ? "border-accent bg-accent text-white" : "border-line bg-white"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <span className="mt-1 block text-xs text-muted">{point.directionAngle}°</span>
+      </div>
 
       <fieldset className="mb-4">
         <legend className="mb-2 text-sm font-semibold">構件位置</legend>
