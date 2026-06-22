@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Building2,
@@ -14,6 +14,7 @@ import {
   ImagePlus,
   LogIn,
   Plus,
+  Save,
   Trash2,
   Users,
 } from "lucide-react";
@@ -55,6 +56,7 @@ import type {
 
 type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
 type AppView = "workspace" | "users";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
 const wallFinishOptions = ["水泥粉光", "油漆", "壁紙", "磁磚", "裝飾品", "其他"];
@@ -73,6 +75,10 @@ export default function HomePage() {
   const [managedUsers, setManagedUsers] = useState<AppUser[]>([]);
   const [caseSearch, setCaseSearch] = useState("");
   const [authError, setAuthError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState("");
+  const saveRequestId = useRef(0);
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
   const filteredCases = cases.filter(
@@ -134,6 +140,9 @@ export default function HomePage() {
     setActiveCaseId(signedOutCase.id);
     setActiveTab("basic");
     setActiveView("workspace");
+    setSaveStatus("idle");
+    setLastSavedAt(null);
+    setSaveError("");
   }
 
   async function loadSignedInUser(user: Parameters<typeof resolveSignedInAppUser>[1]) {
@@ -150,6 +159,9 @@ export default function HomePage() {
       if (savedCases.length) {
         setCases(savedCases);
         setActiveCaseId(savedCases[0].id);
+        setSaveStatus("saved");
+        setLastSavedAt(savedCases[0].updatedAt);
+        setSaveError("");
         return;
       }
 
@@ -157,6 +169,9 @@ export default function HomePage() {
       setCases([firstCase]);
       setActiveCaseId(firstCase.id);
       await saveInspectionCase(supabase, firstCase);
+      setSaveStatus("saved");
+      setLastSavedAt(new Date().toISOString());
+      setSaveError("");
     } catch (error) {
       console.error("Failed to load inspection cases from Supabase", error);
       const message = error instanceof Error ? error.message : "登入失敗，請確認此 Google 帳戶是否已被管理者授權。";
@@ -170,9 +185,23 @@ export default function HomePage() {
     const supabase = createSupabaseBrowserClient();
     if (!supabase || !currentUser) return;
 
-    void saveInspectionCase(supabase, nextCase).catch((error) => {
-      console.error("Failed to save inspection case to Supabase", error);
-    });
+    const requestId = saveRequestId.current + 1;
+    saveRequestId.current = requestId;
+    setSaveStatus("saving");
+    setSaveError("");
+
+    void saveInspectionCase(supabase, nextCase)
+      .then(() => {
+        if (saveRequestId.current !== requestId) return;
+        setSaveStatus("saved");
+        setLastSavedAt(new Date().toISOString());
+      })
+      .catch((error) => {
+        if (saveRequestId.current !== requestId) return;
+        console.error("Failed to save inspection case to Supabase", error);
+        setSaveStatus("error");
+        setSaveError(error instanceof Error ? error.message : "儲存失敗，請確認網路後再試。");
+      });
   }
 
   function updateCase(nextCase: InspectionCase) {
@@ -199,6 +228,11 @@ export default function HomePage() {
     setActiveTab("basic");
     setActiveView("workspace");
     persistCase(nextCase);
+  }
+
+  function manualSaveCase() {
+    if (!activeCase) return;
+    persistCase(activeCase);
   }
 
   async function removeCase(targetCase: InspectionCase) {
@@ -420,6 +454,9 @@ export default function HomePage() {
                     onClick={() => {
                       setActiveCaseId(item.id);
                       setActiveTab("basic");
+                      setSaveStatus("saved");
+                      setLastSavedAt(item.updatedAt);
+                      setSaveError("");
                     }}
                     className="block w-full text-left"
                   >
@@ -453,6 +490,12 @@ export default function HomePage() {
 
           <section className="min-w-0">
             <CaseHeader activeCase={activeCase} onChange={updateCase} />
+            <SaveStatusBar
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              errorMessage={saveError}
+              onManualSave={manualSaveCase}
+            />
             <nav className="workspace-panel mb-4 overflow-x-auto rounded-lg border border-[#1a3d2b] bg-[#0f3322] shadow-sm">
               <div className="flex min-w-max">
                 {workspaceTabs.map((tab) => (
@@ -518,6 +561,85 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean
   { id: "attachment8", label: "附件八 基地照片", available: true },
   { id: "export", label: "匯出報告", available: true },
 ];
+
+function SaveStatusBar({
+  status,
+  lastSavedAt,
+  errorMessage,
+  onManualSave,
+}: {
+  status: SaveStatus;
+  lastSavedAt: string | null;
+  errorMessage: string;
+  onManualSave: () => void;
+}) {
+  const statusContent = (() => {
+    if (status === "saving") {
+      return {
+        icon: <Circle size={14} className="animate-pulse fill-blue-500 text-blue-500" />,
+        label: "儲存中",
+        detail: "正在同步到 Supabase，請先不要關閉頁面。",
+        className: "border-blue-200 bg-blue-50 text-blue-800",
+      };
+    }
+
+    if (status === "error") {
+      return {
+        icon: <AlertTriangle size={16} />,
+        label: "儲存失敗",
+        detail: errorMessage || "請確認網路狀態，必要時按右側手動儲存。",
+        className: "border-orange-200 bg-orange-50 text-orange-800",
+      };
+    }
+
+    if (status === "saved") {
+      return {
+        icon: <CheckCircle2 size={16} />,
+        label: "已自動儲存",
+        detail: lastSavedAt ? `最後儲存：${formatSaveTime(lastSavedAt)}` : "資料已同步。",
+        className: "border-green-200 bg-green-50 text-green-800",
+      };
+    }
+
+    return {
+      icon: <Circle size={14} />,
+      label: "尚未儲存",
+      detail: "修改資料後會自動儲存，也可按右側手動儲存。",
+      className: "border-line bg-paper text-muted",
+    };
+  })();
+
+  return (
+    <div className={`workspace-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-[0_1px_2px_rgba(28,25,23,0.05)] ${statusContent.className}`}>
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="mt-0.5 shrink-0">{statusContent.icon}</span>
+        <div className="min-w-0">
+          <div className="font-bold">{statusContent.label}</div>
+          <div className="text-xs opacity-80">{statusContent.detail}</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onManualSave}
+        disabled={status === "saving"}
+        className="inline-flex min-h-10 items-center gap-2 rounded-md border border-current bg-white/70 px-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <Save size={16} /> 手動儲存
+      </button>
+    </div>
+  );
+}
+
+function formatSaveTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function upsertManagedUser(users: AppUser[], nextUser: AppUser) {
   if (users.some((user) => user.id === nextUser.id || user.email === nextUser.email)) {
