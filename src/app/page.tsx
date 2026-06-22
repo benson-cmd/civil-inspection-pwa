@@ -1719,7 +1719,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           <div>
             <h2 className="text-lg font-bold">附件七匯出預覽</h2>
             <p className="text-sm text-muted">
-              目前照片只存在瀏覽器預覽與本次 PDF 匯出；接 Supabase Storage 後會存入 ci-inspection-photos，並依案件、標的物、樓層與照片編號管理。
+              照片會先在瀏覽器端壓縮，再存入 Supabase Storage 的 ci-inspection-photos，並依案件、標的物、樓層與照片編號管理。
             </p>
           </div>
           <PdfExportButton project={project} target={target} floors={floors} points={points} sitePhotos={[]} />
