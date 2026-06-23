@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import type { Floor, InspectionPoint, LevelMeasurement, Project, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
+import type { Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildReportHtml } from "@/lib/pdf";
 
 interface PdfExportButtonProps {
@@ -14,6 +14,7 @@ interface PdfExportButtonProps {
   levelPlanPaths?: string[];
   tiltMeasurements?: TiltMeasurement[];
   tiltPlanPaths?: string[];
+  reportSections?: ReportSection[];
   completionWarning?: {
     pct: number;
     doneCount: number;
@@ -31,6 +32,7 @@ export function PdfExportButton({
   levelPlanPaths = [],
   tiltMeasurements = [],
   tiltPlanPaths = [],
+  reportSections = [],
   completionWarning,
 }: PdfExportButtonProps) {
   const checklist = buildExportChecklist({
@@ -73,19 +75,24 @@ export function PdfExportButton({
           levelPlanPaths,
           tiltMeasurements,
           tiltPlanPaths,
+          reportSections,
         });
-        const blob = new Blob([buildPreviewHtml(html, project.caseNo || "inspection-report")], { type: "text/html;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const printWindow = window.open(url, "_blank");
+        const previewHtml = buildPreviewHtml(html, project.caseNo || "inspection-report");
+        const printWindow = window.open("", "_blank");
         if (!printWindow) {
+          const blob = new Blob([previewHtml], { type: "text/html;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
           link.download = `${project.caseNo || "inspection-report"}.html`;
           link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
           window.alert("瀏覽器阻擋開新視窗，已改下載 HTML 檔。請開啟後列印另存 PDF。");
           return;
         }
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        printWindow.document.open();
+        printWindow.document.write(previewHtml);
+        printWindow.document.close();
       }}
     >
       <FileText size={18} /> PDF預覽 / 匯出
@@ -163,29 +170,22 @@ function buildExportChecklist({
 }
 
 function buildPreviewHtml(reportHtml: string, fileName: string) {
-  return `<!doctype html>
-<html lang="zh-Hant">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(fileName)} PDF 預覽</title>
-    <style>
-      html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif; background: #f0f4f0; }
-      .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 16px; background: #0d2b1e; color: #f0faf4; }
-      .toolbar strong { font-size: 14px; }
-      .toolbar button { min-height: 40px; border: 0; border-radius: 10px; background: #2d6a4f; color: white; padding: 0 14px; font-weight: 700; cursor: pointer; }
-      iframe { width: 100%; height: calc(100% - 64px); border: 0; background: white; }
-      @media print { .toolbar { display: none; } iframe { height: 100vh; } }
-    </style>
-  </head>
-  <body>
-    <div class="toolbar">
+  const toolbar = `
+    <div class="preview-toolbar">
       <strong>PDF 預覽：${escapeHtml(fileName)}</strong>
-      <button type="button" onclick="document.querySelector('iframe').contentWindow.print()">列印 / 另存 PDF</button>
-    </div>
-    <iframe title="PDF 預覽" srcdoc="${escapeHtml(reportHtml)}"></iframe>
-  </body>
-</html>`;
+      <button type="button" onclick="window.print()">列印 / 另存 PDF</button>
+    </div>`;
+  const previewCss = `
+    <style>
+      .preview-toolbar { position: sticky; top: 0; z-index: 1000; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 16px; background: #0d2b1e; color: #f0faf4; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif; }
+      .preview-toolbar strong { font-size: 14px; }
+      .preview-toolbar button { min-height: 40px; border: 0; border-radius: 10px; background: #2d6a4f; color: white; padding: 0 14px; font-weight: 700; cursor: pointer; }
+      @media print { .preview-toolbar { display: none; } }
+    </style>`;
+
+  return reportHtml
+    .replace("</head>", `${previewCss}</head>`)
+    .replace("<body>", `<body>${toolbar}`);
 }
 
 function escapeHtml(value: string) {

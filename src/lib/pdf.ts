@@ -1,4 +1,4 @@
-import type { Floor, InspectionPoint, LevelMeasurement, Project, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
+import type { Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildPhotoCaption } from "./caption";
 
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
@@ -17,6 +17,7 @@ export function buildReportHtml(input: {
   levelPlanPaths?: string[];
   tiltMeasurements?: TiltMeasurement[];
   tiltPlanPaths?: string[];
+  reportSections?: ReportSection[];
 }) {
   const {
     project,
@@ -28,9 +29,25 @@ export function buildReportHtml(input: {
     levelPlanPaths = [],
     tiltMeasurements = [],
     tiltPlanPaths = [],
+    reportSections = [],
   } = input;
   const floorsWithData = floors.filter((floor) => points.some((point) => point.floorId === floor.id));
   const photoPoints = points.filter((point) => point.photo?.imageUrl);
+  const reportBody = [
+    buildCoverPage(project),
+    buildTableOfContentsPage(reportSections),
+    ...buildMainReportPages(reportSections),
+  ].join("");
+  const attachmentBody = [
+    buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
+    buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths),
+    ...floorsWithData.map((floor, index) => buildFloorPlanPage(project, target, floor, index + 1)),
+    points.length ? buildInspectionTablePage(project, target, floors, points, floorsWithData.length + 1) : "",
+    ...chunk(photoPoints, 2).map((cards, index) => buildPhotoPage(target.address, cards, floorsWithData.length + 2 + index, index + 1)),
+    ...chunk(sitePhotos, 2).map((cards, index) =>
+      buildSitePhotoPage(cards, floorsWithData.length + 2 + chunk(photoPoints, 2).length + index, index + 1),
+    ),
+  ].join("");
 
   return `<!doctype html>
   <html lang="zh-Hant">
@@ -40,18 +57,78 @@ export function buildReportHtml(input: {
       <style>${reportCss}</style>
     </head>
     <body>
-      ${buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths)}
-      ${buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths)}
-      ${floorsWithData.map((floor, index) => buildFloorPlanPage(project, target, floor, index + 1)).join("")}
-      ${points.length ? buildInspectionTablePage(project, target, floors, points, floorsWithData.length + 1) : ""}
-      ${chunk(photoPoints, 2)
-        .map((cards, index) => buildPhotoPage(target.address, cards, floorsWithData.length + 2 + index, index + 1))
-        .join("")}
-      ${chunk(sitePhotos, 2)
-        .map((cards, index) => buildSitePhotoPage(cards, floorsWithData.length + 2 + chunk(photoPoints, 2).length + index, index + 1))
-        .join("")}
+      ${reportBody || attachmentBody ? `${reportBody}${attachmentBody}` : buildEmptyReportPage(project)}
     </body>
   </html>`;
+}
+
+function buildCoverPage(project: Project) {
+  const engineers = parseEngineerNames(project);
+  return `
+    <section class="page cover-page">
+      <div class="cover-association">社團法人臺中市土木技師公會</div>
+      <div class="cover-main">
+        <div class="cover-applicant">${escapeHtml(project.applicantName || "申請單位")}</div>
+        <h1>${escapeHtml(project.workName || project.projectName || "工程名稱")}</h1>
+        <h2>${escapeHtml(project.projectName || "鄰房現況鑑定報告書")}</h2>
+        <div class="cover-case">(案件編號：${escapeHtml(project.caseNo || "")})</div>
+        <div class="cover-volume">【全壹冊】</div>
+      </div>
+      <div class="cover-meta">
+        <div>鑑定人：${escapeHtml(engineers || "　　　　")}　土木技師</div>
+        <div>日期：${formatDate(project.finalDate || project.inspectionDate)}</div>
+      </div>
+    </section>`;
+}
+
+function buildTableOfContentsPage(sections: ReportSection[]) {
+  const effectiveSections = sections.length ? sections : defaultReportSections();
+  return `
+    <section class="page main-report-page toc-page">
+      <h1>目　錄</h1>
+      <table class="toc-table">
+        <tbody>
+          ${effectiveSections
+            .map((section, index) => `<tr><td>${escapeHtml(section.title)}</td><td>${index + 1}</td></tr>`)
+            .join("")}
+        </tbody>
+      </table>
+    </section>`;
+}
+
+function buildMainReportPages(sections: ReportSection[]) {
+  const effectiveSections = sections.length ? sections : defaultReportSections();
+  return effectiveSections.map(
+    (section) => `
+      <section class="page main-report-page">
+        <h1>${escapeHtml(section.title)}</h1>
+        <div class="main-section-content">${escapeHtml(section.content || "尚未填寫。").replaceAll("\n", "<br>")}</div>
+      </section>`,
+  );
+}
+
+function buildEmptyReportPage(project: Project) {
+  return `
+    <section class="page main-report-page">
+      <h1>${escapeHtml(project.projectName || "現況鑑定報告書")}</h1>
+      <div class="main-section-content">目前尚無可匯出的主文或附件資料，請先完成基本資料、主文或附件編輯。</div>
+    </section>`;
+}
+
+function defaultReportSections(): ReportSection[] {
+  return [
+    { id: "applicant", order: 1, title: "一、申請單位", content: "", source: "basic", fixedTitle: true },
+    { id: "application-date", order: 2, title: "二、申請日期", content: "", source: "basic", fixedTitle: true },
+    { id: "target-location", order: 3, title: "三、標的物之坐落", content: "", source: "basic", fixedTitle: true },
+    { id: "purpose", order: 4, title: "四、鑑定要旨", content: "", source: "editable", fixedTitle: true },
+    { id: "basis", order: 5, title: "五、鑑定依據", content: "", source: "editable", fixedTitle: true },
+    { id: "inspection-dates", order: 6, title: "六、會勘日期", content: "", source: "editable", fixedTitle: true },
+    { id: "staff", order: 7, title: "七、會勘人員", content: "", source: "basic", fixedTitle: true },
+    { id: "process", order: 8, title: "八、鑑定過程", content: "", source: "editable", fixedTitle: true },
+    { id: "site-status", order: 9, title: "九、工地現況", content: "", source: "editable", fixedTitle: true },
+    { id: "target-status", order: 10, title: "十、鑑定標的物之用途及現況", content: "", source: "attachment7", fixedTitle: true },
+    { id: "attachments", order: 11, title: "十一、附件", content: "", source: "attachments", fixedTitle: true },
+  ];
 }
 
 function buildLevelMeasurementPages(project: Project, rows: LevelMeasurement[], planPaths: string[]) {
@@ -358,6 +435,21 @@ const reportCss = `
 @page { size: A4; margin: 0; }
 body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", "Microsoft JhengHei", serif; }
 .page { width: 210mm; min-height: 297mm; break-after: page; position: relative; padding: 14mm 18mm 16mm; box-sizing: border-box; background: white; overflow: hidden; }
+.cover-page { padding: 18mm 22mm; text-align: center; }
+.cover-association { margin-top: 4mm; font-size: 24px; letter-spacing: 2px; }
+.cover-main { margin-top: 38mm; line-height: 1.8; }
+.cover-applicant { font-size: 24px; font-weight: 700; }
+.cover-main h1 { margin: 8mm 0 0; font-size: 25px; font-weight: 700; line-height: 1.5; }
+.cover-main h2 { margin: 2mm 0; font-size: 30px; font-weight: 700; line-height: 1.45; }
+.cover-case, .cover-volume { font-size: 20px; font-weight: 700; }
+.cover-meta { position: absolute; left: 28mm; right: 28mm; bottom: 34mm; display: grid; gap: 8mm; text-align: left; font-size: 20px; line-height: 1.7; }
+.main-report-page { padding: 18mm 23mm 20mm; overflow: visible; font-size: 20px; line-height: 1.8; }
+.main-report-page h1 { margin: 0 0 8mm; font-size: 22px; font-weight: 700; line-height: 1.5; }
+.main-section-content { white-space: normal; text-align: justify; }
+.toc-page h1 { text-align: center; font-size: 26px; letter-spacing: 8px; }
+.toc-table { width: 100%; border-collapse: collapse; margin-top: 12mm; font-size: 19px; }
+.toc-table td { padding: 2.5mm 0; border-bottom: 1px dotted #777; }
+.toc-table td:last-child { width: 18mm; text-align: right; }
 .footer { position: absolute; left: 0; right: 0; bottom: 8mm; text-align: center; font-size: 12px; }
 .top-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 19px; }
 .top-row h1 { margin: 8mm 0 6mm 10mm; font-size: 20px; font-weight: 400; }
@@ -446,6 +538,14 @@ function formatRocDate(date: string) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return escapeHtml(date);
   return `${parsed.getFullYear() - 1911}.${parsed.getMonth() + 1}.${parsed.getDate()}`;
+}
+
+function parseEngineerNames(project: Project) {
+  const names = (project.engineers ?? [])
+    .map((engineer) => engineer.name.trim())
+    .filter(Boolean);
+  if (names.length) return names.join("、");
+  return project.engineerNames ?? "";
 }
 
 function tiltDisplacement(row: TiltMeasurement) {
