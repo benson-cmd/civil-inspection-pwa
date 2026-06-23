@@ -103,8 +103,8 @@ export function AttachmentSixEditor({
                 <th className="border border-line p-2">測量值 H m</th>
                 <th className="border border-line p-2">上測點 mm</th>
                 <th className="border border-line p-2">下測點 mm</th>
-                <th className="border border-line p-2">傾斜值 e m</th>
-                <th className="border border-line p-2">傾斜度</th>
+                <th className="border border-line p-2">位移量(mm)</th>
+                <th className="border border-line p-2">傾斜率</th>
                 <th className="border border-line p-2">照片 A/B</th>
                 <th className="border border-line p-2">操作</th>
               </tr>
@@ -112,9 +112,9 @@ export function AttachmentSixEditor({
             <tbody>
               {displayRows.map((row) => {
                 const displacementMm = calculateDisplacement(row);
-                const tiltValueM = displacementMm === null ? null : displacementMm / 1000;
                 const ratio = calculateRatio(displacementMm, row.floorHeight);
                 const warning = ratio !== null && ratio < 200;
+                const hasDisplacement = displacementMm !== null && displacementMm !== 0;
 
                 return (
                   <tr
@@ -150,11 +150,12 @@ export function AttachmentSixEditor({
                     <td className="border border-line p-2">
                       <TableInput type="number" inputMode="decimal" value={row.lowerDistance} onChange={(lowerDistance) => updateRow(row.id, { lowerDistance })} />
                     </td>
-                    <td className="mono-data border border-line p-2 font-bold text-accent">
-                      {tiltValueM === null ? "" : `${tiltValueM.toFixed(5)} M`}
+                    <td className={`mono-data border border-line p-2 ${hasDisplacement ? "font-bold" : ""}`}>
+                      {hasDisplacement ? displacementMm.toFixed(1) : "—"}
                     </td>
-                    <td className={`mono-data border border-line p-2 font-bold ${warning ? "text-orange-700" : "text-accent"}`}>
-                      {ratio === null ? "" : formatRatio(displacementMm, ratio)}
+                    <td className={`mono-data border border-line p-2 ${warning ? "bg-orange-50 font-bold text-orange-700" : ""}`}>
+                      {ratio !== null && hasDisplacement ? formatRatio(displacementMm, ratio) : "—"}
+                      {warning ? " ⚠" : ""}
                     </td>
                     <td className="border border-line p-2">
                       <div className="grid gap-2">

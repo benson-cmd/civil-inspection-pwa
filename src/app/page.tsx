@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Building2,
@@ -79,6 +79,7 @@ export default function HomePage() {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState("");
   const saveRequestId = useRef(0);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeCase = cases.find((item) => item.id === activeCaseId) ?? cases[0];
   const filteredCases = cases.filter(
@@ -87,6 +88,8 @@ export default function HomePage() {
       item.project.projectName.includes(caseSearch),
   );
   const supabaseEnabled = hasSupabaseEnv();
+  const exportFloors = activeCase ? buildAttachmentSevenFloors(activeCase) : [];
+  const exportPoints = activeCase?.attachmentSeven?.points ?? [];
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -117,6 +120,12 @@ export default function HomePage() {
     });
 
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
   }, []);
 
   async function signInWithGoogle() {
@@ -181,28 +190,31 @@ export default function HomePage() {
     }
   }
 
-  function persistCase(nextCase: InspectionCase) {
+  const persistCase = useCallback((nextCase: InspectionCase) => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase || !currentUser) return;
 
+    if (persistTimer.current) clearTimeout(persistTimer.current);
     const requestId = saveRequestId.current + 1;
     saveRequestId.current = requestId;
-    setSaveStatus("saving");
-    setSaveError("");
+    persistTimer.current = setTimeout(() => {
+      setSaveStatus("saving");
+      setSaveError("");
 
-    void saveInspectionCase(supabase, nextCase)
-      .then(() => {
-        if (saveRequestId.current !== requestId) return;
-        setSaveStatus("saved");
-        setLastSavedAt(new Date().toISOString());
-      })
-      .catch((error) => {
-        if (saveRequestId.current !== requestId) return;
-        console.error("Failed to save inspection case to Supabase", error);
-        setSaveStatus("error");
-        setSaveError(error instanceof Error ? error.message : "儲存失敗，請確認網路後再試。");
-      });
-  }
+      void saveInspectionCase(supabase, nextCase)
+        .then(() => {
+          if (saveRequestId.current !== requestId) return;
+          setSaveStatus("saved");
+          setLastSavedAt(new Date().toISOString());
+        })
+        .catch((error) => {
+          if (saveRequestId.current !== requestId) return;
+          console.error("Failed to save inspection case to Supabase", error);
+          setSaveStatus("error");
+          setSaveError(error instanceof Error ? error.message : "儲存失敗");
+        });
+    }, 600);
+  }, [currentUser]);
 
   function updateCase(nextCase: InspectionCase) {
     const persistedCase = {
@@ -543,7 +555,7 @@ export default function HomePage() {
             ) : null}
             {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
-            {activeTab === "export" ? <ExportPanel activeCase={activeCase} /> : null}
+            {activeTab === "export" ? <ExportPanel activeCase={activeCase} floors={exportFloors} points={exportPoints} /> : null}
           </section>
         </section>
       )}
@@ -684,11 +696,12 @@ function getInspectionPointWarnings(point: InspectionPoint) {
 function buildAttachmentSevenFloors(activeCase: InspectionCase): Floor[] {
   const data = activeCase.attachmentSeven;
   if (!data) return [];
+  const targets = data.targets.length ? data.targets : [activeCase.target];
 
-  return data.targets.flatMap((target) =>
-    (data.floorNamesByTarget[target.id] ?? defaultFloorNames).map((floorName) => {
+  return targets.flatMap((target) =>
+    (data.floorNamesByTarget?.[target.id] ?? defaultFloorNames).map((floorName) => {
       const floorId = floorIdForTarget(target.id, floorName);
-      const floorPoints = data.points.filter((point) => point.floorId === floorId);
+      const floorPoints = data.points?.filter((point) => point.floorId === floorId) ?? [];
       return {
         id: floorId,
         targetId: target.id,
@@ -1933,14 +1946,20 @@ function AttachmentEightEditor({ activeCase, onChange }: { activeCase: Inspectio
   );
 }
 
-function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
+function ExportPanel({
+  activeCase,
+  floors,
+  points,
+}: {
+  activeCase: InspectionCase;
+  floors: Floor[];
+  points: InspectionPoint[];
+}) {
   const engineers = getProjectEngineers(activeCase.project);
-  const attachmentSevenFloors = buildAttachmentSevenFloors(activeCase);
-  const attachmentSevenPoints = activeCase.attachmentSeven?.points ?? [];
-  const missingPhotoPoints = attachmentSevenPoints.filter((point) => !point.photo?.imageUrl);
-  const missingCrackWidths = attachmentSevenPoints.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
-  const missingCaptions = attachmentSevenPoints.filter((point) => !point.photo?.caption && !point.note.trim());
-  const floorsMissingPlans = attachmentSevenFloors.filter((floor) => !floor.planSvgOrJson.includes("<path"));
+  const missingPhotoPoints = points.filter((point) => !point.photo?.imageUrl);
+  const missingCrackWidths = points.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
+  const missingCaptions = points.filter((point) => !point.photo?.caption && !point.note.trim());
+  const floorsMissingPlans = floors.filter((floor) => !floor.planSvgOrJson.includes("<path"));
   const levelRowsMissingPhotos = (activeCase.levelMeasurements ?? []).filter((row) => (row.pointNo || row.location || row.relativeElevation) && !row.photo?.imageUrl);
   const tiltRowsMissingPhotos = (activeCase.tiltMeasurements ?? []).filter(
     (row) => (row.lineNo || row.location || row.floorHeight) && (!row.upperPhoto?.imageUrl || !row.lowerPhoto?.imageUrl),
@@ -1967,7 +1986,7 @@ function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
     },
     {
       id: "floor-plan",
-      status: attachmentSevenFloors.length === 0 || floorsMissingPlans.length === 0 ? "complete" : "missing",
+      status: floors.length === 0 || floorsMissingPlans.length === 0 ? "complete" : "missing",
       text: "樓層已有平面圖",
       hint: floorsMissingPlans.length ? `${floorsMissingPlans.length} 個樓層尚未繪製平面圖。` : "附件七已有樓層平面圖。",
     },
@@ -2033,8 +2052,8 @@ function ExportPanel({ activeCase }: { activeCase: InspectionCase }) {
         <PdfExportButton
           project={activeCase.project}
           target={activeCase.target}
-          floors={attachmentSevenFloors}
-          points={attachmentSevenPoints}
+          floors={floors}
+          points={points}
           sitePhotos={activeCase.sitePhotos ?? []}
           levelMeasurements={activeCase.levelMeasurements ?? []}
           levelPlanPaths={activeCase.levelPlanPaths ?? []}

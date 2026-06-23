@@ -198,10 +198,23 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
         />
       </label>
 
-      <div className="rounded-md border border-line bg-white p-3 text-sm">
-        <div className="mb-1 font-semibold">自動說明</div>
-        <p className="text-muted">{caption}</p>
-      </div>
+      <label className="block">
+        <span className="mb-1 block text-sm font-semibold text-muted">照片說明</span>
+        <textarea
+          value={point.photo?.caption || caption}
+          rows={2}
+          disabled={!point.photo}
+          onChange={(event) => {
+            if (!point.photo) return;
+            onChange({
+              ...point,
+              photo: { ...point.photo, caption: event.target.value },
+            });
+          }}
+          className="w-full rounded-md border border-line bg-white p-2 text-sm leading-relaxed disabled:bg-stone-50 disabled:text-muted"
+        />
+        {!point.photo ? <span className="mt-1 block text-xs text-muted">上傳照片後即可手動編輯照片說明。</span> : null}
+      </label>
 
       {point.photo?.imageUrl ? (
         <img src={point.photo.imageUrl} alt={`照片 ${point.photoNo}`} className="mt-4 max-h-56 w-full rounded-md border border-line object-contain" />
