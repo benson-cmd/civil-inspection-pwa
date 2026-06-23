@@ -1,7 +1,7 @@
 {
-  "name": "土木技師鄰房現況鑑定",
+  "name": "現況鑑定報告系統",
   "short_name": "現況鑑定",
-  "description": "附件七與附件八現況調查、照片標點與 PDF 匯出工具",
+  "description": "土木技師專用的現況鑑定報告工作台，支援案件管理、現場照片紀錄、平面圖標註、測量資料與 PDF 報告匯出。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f5ee",
