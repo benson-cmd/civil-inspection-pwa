@@ -508,6 +508,37 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
   await saveTiltMeasurements(supabase, inspectionCase);
 }
 
+export function saveLocalDraft(inspectionCase: InspectionCase): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      `draft_${inspectionCase.id}`,
+      JSON.stringify({ data: inspectionCase, savedAt: new Date().toISOString() }),
+    );
+  } catch {
+    console.warn("localStorage 暫存失敗");
+  }
+}
+
+export function loadLocalDraft(caseId: string): InspectionCase | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(`draft_${caseId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: InspectionCase; savedAt: string };
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLocalDraft(caseId: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(`draft_${caseId}`);
+}
+
 export async function deleteInspectionCase(supabase: SupabaseClient, projectId: string) {
   const { error } = await supabase.from("ci_projects").delete().eq("id", projectId);
   if (error) throw error;

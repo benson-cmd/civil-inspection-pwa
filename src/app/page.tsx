@@ -6,12 +6,14 @@ import {
   Building2,
   CalendarDays,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   Circle,
   ClipboardList,
   FileText,
   Home,
   ImagePlus,
+  Loader2,
   LogIn,
   Plus,
   Save,
@@ -29,10 +31,13 @@ import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
 import {
   deleteManagedUser,
   deleteInspectionCase,
+  clearLocalDraft,
   fetchInspectionCases,
   fetchManagedUsers,
+  loadLocalDraft,
   resolveSignedInAppUser,
   saveInspectionCase,
+  saveLocalDraft,
   saveManagedUser,
 } from "@/lib/case-store";
 import { createCase } from "@/lib/defaults";
@@ -130,6 +135,43 @@ export default function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    function syncLocalDrafts() {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) return;
+
+      const drafts = cases
+        .map((inspectionCase) => loadLocalDraft(inspectionCase.id))
+        .filter((draft): draft is InspectionCase => Boolean(draft));
+
+      if (!drafts.length) return;
+      setSaveStatus("saving");
+
+      void Promise.all(
+        drafts.map((draft) =>
+          saveInspectionCase(supabase, draft).then(() => {
+            clearLocalDraft(draft.id);
+          }),
+        ),
+      )
+        .then(() => {
+          setSaveStatus("saved");
+          setLastSavedAt(new Date().toISOString());
+          setSaveError("");
+        })
+        .catch((error) => {
+          console.error("Failed to sync local drafts after reconnect", error);
+          setSaveStatus("error");
+          setSaveError(error instanceof Error ? error.message : "儲存失敗，已暫存至本機");
+        });
+    }
+
+    window.addEventListener("online", syncLocalDrafts);
+    return () => window.removeEventListener("online", syncLocalDrafts);
+  }, [cases, currentUser]);
+
   async function signInWithGoogle() {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) return;
@@ -168,10 +210,11 @@ export default function HomePage() {
       setManagedUsers(await fetchManagedUsers(supabase, signedInUser));
       const savedCases = await fetchInspectionCases(supabase, signedInUser.id);
       if (savedCases.length) {
-        setCases(savedCases);
-        setActiveCaseId(savedCases[0].id);
+        const resolvedCases = await restoreLocalDraftsIfNeeded(supabase, savedCases);
+        setCases(resolvedCases);
+        setActiveCaseId(resolvedCases[0].id);
         setSaveStatus("saved");
-        setLastSavedAt(savedCases[0].updatedAt);
+        setLastSavedAt(resolvedCases[0].updatedAt);
         setSaveError("");
         return;
       }
@@ -206,6 +249,7 @@ export default function HomePage() {
       void saveInspectionCase(supabase, nextCase)
         .then(() => {
           if (saveRequestId.current !== requestId) return;
+          clearLocalDraft(nextCase.id);
           setSaveStatus("saved");
           setLastSavedAt(new Date().toISOString());
         })
@@ -213,10 +257,49 @@ export default function HomePage() {
           if (saveRequestId.current !== requestId) return;
           console.error("Failed to save inspection case to Supabase", error);
           setSaveStatus("error");
-          setSaveError(error instanceof Error ? error.message : "儲存失敗");
+          setSaveError(error instanceof Error ? error.message : "儲存失敗，已暫存至本機");
+          saveLocalDraft(nextCase);
         });
     }, 600);
   }, [currentUser]);
+
+  async function restoreLocalDraftsIfNeeded(supabase: NonNullable<ReturnType<typeof createSupabaseBrowserClient>>, cloudCases: InspectionCase[]) {
+    const resolvedCases: InspectionCase[] = [];
+
+    for (const cloudCase of cloudCases) {
+      const draft = loadLocalDraft(cloudCase.id);
+      if (!draft) {
+        resolvedCases.push(cloudCase);
+        continue;
+      }
+
+      const confirmed = window.confirm(
+        `案件「${cloudCase.project.caseNo} ${cloudCase.project.projectName}」偵測到本機有未同步的草稿資料，是否要還原？\n（選「取消」將使用雲端版本）`,
+      );
+
+      if (!confirmed) {
+        clearLocalDraft(cloudCase.id);
+        resolvedCases.push(cloudCase);
+        continue;
+      }
+
+      resolvedCases.push(draft);
+      void saveInspectionCase(supabase, draft)
+        .then(() => {
+          clearLocalDraft(draft.id);
+          setSaveStatus("saved");
+          setLastSavedAt(new Date().toISOString());
+          setSaveError("");
+        })
+        .catch((error) => {
+          console.error("Failed to sync restored local draft", error);
+          setSaveStatus("error");
+          setSaveError(error instanceof Error ? error.message : "儲存失敗，已暫存至本機");
+        });
+    }
+
+    return resolvedCases;
+  }
 
   function updateCase(nextCase: InspectionCase) {
     const persistedCase = {
@@ -249,6 +332,45 @@ export default function HomePage() {
     persistCase(activeCase);
   }
 
+  function selectCase(item: InspectionCase) {
+    const draft = loadLocalDraft(item.id);
+    let nextCase = item;
+
+    if (draft && draft.updatedAt !== item.updatedAt) {
+      const confirmed = window.confirm(
+        `案件「${item.project.caseNo} ${item.project.projectName}」偵測到本機有未同步的草稿資料，是否要還原？\n（選「取消」將使用雲端版本）`,
+      );
+
+      if (confirmed) {
+        nextCase = draft;
+        setCases((current) => current.map((caseItem) => (caseItem.id === draft.id ? draft : caseItem)));
+        const supabase = createSupabaseBrowserClient();
+        if (supabase) {
+          void saveInspectionCase(supabase, draft)
+            .then(() => {
+              clearLocalDraft(draft.id);
+              setSaveStatus("saved");
+              setLastSavedAt(new Date().toISOString());
+              setSaveError("");
+            })
+            .catch((error) => {
+              console.error("Failed to sync restored local draft", error);
+              setSaveStatus("error");
+              setSaveError(error instanceof Error ? error.message : "儲存失敗，已暫存至本機");
+            });
+        }
+      } else {
+        clearLocalDraft(item.id);
+      }
+    }
+
+    setActiveCaseId(nextCase.id);
+    setActiveTab("basic");
+    setSaveStatus("saved");
+    setLastSavedAt(nextCase.updatedAt);
+    setSaveError("");
+  }
+
   async function removeCase(targetCase: InspectionCase) {
     const confirmed = window.confirm(
       `確定要刪除案件「${targetCase.project.caseNo} ${targetCase.project.projectName}」嗎？\n\n刪除後此案件的基本資料、附件七/八與測量資料都會一併移除，且無法復原。`,
@@ -260,6 +382,7 @@ export default function HomePage() {
 
     try {
       await deleteInspectionCase(supabase, targetCase.id);
+      clearLocalDraft(targetCase.id);
       setCases((current) => {
         const nextCases = current.filter((item) => item.id !== targetCase.id);
         const fallbackCase = nextCases[0] ?? createCase(currentUser?.id ?? "user-admin");
@@ -465,13 +588,7 @@ export default function HomePage() {
                 >
                   <button
                     type="button"
-                    onClick={() => {
-                      setActiveCaseId(item.id);
-                      setActiveTab("basic");
-                      setSaveStatus("saved");
-                      setLastSavedAt(item.updatedAt);
-                      setSaveError("");
-                    }}
+                    onClick={() => selectCase(item)}
                     className="block w-full text-left"
                   >
                     <span className="flex items-start justify-between gap-2">
@@ -579,7 +696,7 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean
 function SaveStatusBar({
   status,
   lastSavedAt,
-  errorMessage,
+  errorMessage: _errorMessage,
   onManualSave,
 }: {
   status: SaveStatus;
@@ -589,49 +706,39 @@ function SaveStatusBar({
 }) {
   const statusContent = (() => {
     if (status === "saving") {
-      return {
-        icon: <Circle size={14} className="animate-pulse fill-blue-500 text-blue-500" />,
-        label: "儲存中",
-        detail: "正在同步到 Supabase，請先不要關閉頁面。",
-        className: "border-blue-200 bg-blue-50 text-blue-800",
-      };
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-muted animate-pulse">
+          <Loader2 size={13} className="animate-spin" /> 儲存中...
+        </span>
+      );
     }
 
     if (status === "error") {
-      return {
-        icon: <AlertTriangle size={16} />,
-        label: "儲存失敗",
-        detail: errorMessage || "請確認網路狀態，必要時按右側手動儲存。",
-        className: "border-orange-200 bg-orange-50 text-orange-800",
-      };
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-orange-600">
+          <AlertCircle size={13} /> 儲存失敗，已暫存至本機
+        </span>
+      );
     }
 
     if (status === "saved") {
-      return {
-        icon: <CheckCircle2 size={16} />,
-        label: "已自動儲存",
-        detail: lastSavedAt ? `最後儲存：${formatSaveTime(lastSavedAt)}` : "資料已同步。",
-        className: "border-green-200 bg-green-50 text-green-800",
-      };
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-accent">
+          <CheckCircle2 size={13} /> 已儲存 {formatRelativeTime(lastSavedAt)}
+        </span>
+      );
     }
 
-    return {
-      icon: <Circle size={14} />,
-      label: "尚未儲存",
-      detail: "修改資料後會自動儲存，也可按右側手動儲存。",
-      className: "border-line bg-paper text-muted",
-    };
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-muted">
+        <Circle size={13} /> 修改後會自動儲存
+      </span>
+    );
   })();
 
   return (
-    <div className={`workspace-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-[0_1px_2px_rgba(28,25,23,0.05)] ${statusContent.className}`}>
-      <div className="flex min-w-0 items-start gap-2">
-        <span className="mt-0.5 shrink-0">{statusContent.icon}</span>
-        <div className="min-w-0">
-          <div className="font-bold">{statusContent.label}</div>
-          <div className="text-xs opacity-80">{statusContent.detail}</div>
-        </div>
-      </div>
+    <div className="workspace-panel mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-paper px-4 py-3 text-sm shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
+      {statusContent}
       <button
         type="button"
         onClick={onManualSave}
@@ -644,15 +751,13 @@ function SaveStatusBar({
   );
 }
 
-function formatSaveTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-TW", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatRelativeTime(isoString: string | null): string {
+  if (!isoString) return "";
+  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diff < 10) return "剛剛";
+  if (diff < 60) return `${diff} 秒前`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分鐘前`;
+  return `${Math.floor(diff / 3600)} 小時前`;
 }
 
 function upsertManagedUser(users: AppUser[], nextUser: AppUser) {
@@ -742,7 +847,7 @@ function reportStatusBadgeClass(status: ReportStatus) {
   if (status === "待補件") return "bg-orange-100 text-orange-700";
   if (status === "完稿") return "bg-green-100 text-green-700";
   if (status === "已歸檔") return "bg-stone-100 text-stone-500";
-  return "bg-gray-100 text-gray-600";
+  return "bg-gray-100 text-gray-500";
 }
 
 async function uploadInspectionPhoto(projectId: string, scope: string, file: File) {
