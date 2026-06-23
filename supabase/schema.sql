@@ -29,6 +29,7 @@ create table public.projects (
   report_status text not null default '草稿',
   received_date date,
   received_no text,
+  final_date date,
   target_summary text,
   engineer_names text,
   association_engineers text,

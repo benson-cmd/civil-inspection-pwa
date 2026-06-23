@@ -36,6 +36,7 @@ type ProjectRow = {
   report_status: string | null;
   received_date: string | null;
   received_no: string | null;
+  final_date: string | null;
   target_summary: string | null;
   engineer_names: string | null;
   association_engineers: string | null;
@@ -413,6 +414,7 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     report_status: project.reportStatus ?? "草稿",
     received_date: project.receivedDate || null,
     received_no: project.receivedNo ?? "",
+    final_date: project.finalDate || null,
     target_summary: project.targetSummary ?? "",
     engineer_names: JSON.stringify(project.engineers ?? []),
     association_engineers: project.associationEngineers ?? "",
@@ -429,13 +431,15 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
       String(projectError.message).includes("report_status") ||
       String(projectError.message).includes("level_plan_paths") ||
       String(projectError.message).includes("tilt_plan_paths") ||
-      String(projectError.message).includes("work_name")
+      String(projectError.message).includes("work_name") ||
+      String(projectError.message).includes("final_date")
     ) {
       const {
         report_status: _reportStatus,
         level_plan_paths: _levelPlanPaths,
         tilt_plan_paths: _tiltPlanPaths,
         work_name: _workName,
+        final_date: _finalDate,
         ...legacyProjectPayload
       } = projectPayload;
       const { error: legacyProjectError } = await supabase.from("ci_projects").upsert(legacyProjectPayload, { onConflict: "id" });
@@ -770,6 +774,7 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
     reportStatus: normalizeReportStatus(row.report_status),
     receivedDate: row.received_date ?? "",
     receivedNo: row.received_no ?? "",
+    finalDate: row.final_date ?? "",
     targetSummary: row.target_summary ?? "",
     engineers: parseEngineers(row.engineer_names),
     engineerNames: "",
