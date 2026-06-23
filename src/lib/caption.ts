@@ -8,8 +8,10 @@ export function buildPhotoCaption(input: {
   note?: string;
 }) {
   if (input.inaccessible) {
+    const component = input.componentType.join("、");
+    const prefix = component ? `${component}（不便進入，無法拍攝）` : "不便進入，無法拍攝";
     const note = input.note?.trim() ? `；${input.note.trim()}` : "";
-    return `不便進入／拍照${note}`;
+    return `${prefix}${note}`;
   }
 
   const component = input.componentType.join("、") || "未註明構件";

@@ -1970,96 +1970,69 @@ function ExportPanel({
   floors: Floor[];
   points: InspectionPoint[];
 }) {
-  const engineers = getProjectEngineers(activeCase.project);
-  const missingPhotoPoints = points.filter((point) => !point.photo?.imageUrl);
-  const missingCrackWidths = points.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
-  const missingCaptions = points.filter((point) => !point.photo?.caption && !point.note.trim());
-  const floorsMissingPlans = floors.filter((floor) => !floor.planSvgOrJson.includes("<path"));
-  const levelRowsMissingPhotos = (activeCase.levelMeasurements ?? []).filter((row) => (row.pointNo || row.location || row.relativeElevation) && !row.photo?.imageUrl);
-  const tiltRowsMissingPhotos = (activeCase.tiltMeasurements ?? []).filter(
-    (row) => (row.lineNo || row.location || row.floorHeight) && (!row.upperPhoto?.imageUrl || !row.lowerPhoto?.imageUrl),
-  );
-  const checklist = [
+  const checks = [
     {
-      id: "basic",
-      status:
-        activeCase.project.caseNo.trim() &&
-        activeCase.project.projectName.trim() &&
-        activeCase.project.applicantName.trim() &&
-        activeCase.project.inspectionDate.trim() &&
-        engineers.some((engineer) => engineer.name.trim())
-          ? "complete"
-          : "missing",
-      text: "基本資料完整",
-      hint: "需填案件編號、案件名稱、申請單位、鑑定日期與鑑定技師。",
+      label: "案件編號已填寫",
+      done: !!activeCase.project.caseNo.trim(),
     },
     {
-      id: "target-address",
-      status: activeCase.target.address.trim() ? "complete" : "missing",
-      text: "標的物已有地址",
-      hint: "請在基本資料或附件七標的物填寫地址。",
+      label: "鑑定技師已填寫",
+      done: getProjectEngineers(activeCase.project).some((engineer) => !!engineer.name.trim()),
     },
     {
-      id: "floor-plan",
-      status: floors.length === 0 || floorsMissingPlans.length === 0 ? "complete" : "missing",
-      text: "樓層已有平面圖",
-      hint: floorsMissingPlans.length ? `${floorsMissingPlans.length} 個樓層尚未繪製平面圖。` : "附件七已有樓層平面圖。",
+      label: "完稿日期已填寫",
+      done: !!activeCase.project.finalDate?.trim(),
     },
     {
-      id: "photo-upload",
-      status: missingPhotoPoints.length === 0 ? "complete" : "missing",
-      text: "照片點已上傳照片",
-      hint: missingPhotoPoints.length ? `${missingPhotoPoints.length} 個照片點未拍照。` : "附件七照片點均已上傳照片。",
+      label: "標的物坐落已填寫",
+      done: !!activeCase.target?.address.trim(),
     },
     {
-      id: "crack-width",
-      status: missingCrackWidths.length === 0 ? "complete" : "missing",
-      text: "裂縫寬度已填寫",
-      hint: missingCrackWidths.length ? `${missingCrackWidths.length} 個裂縫點缺裂縫寬。` : "勾選裂縫者均已填裂縫寬。",
+      label: "附件七已有照片點位",
+      done: (activeCase.attachmentSeven?.points ?? []).length > 0,
     },
     {
-      id: "caption",
-      status: missingCaptions.length === 0 ? "complete" : "missing",
-      text: "照片說明存在",
-      hint: missingCaptions.length ? `${missingCaptions.length} 個照片點缺說明或備註。` : "照片點已有說明來源。",
+      label: "附件五水準測量已輸入",
+      done: (activeCase.levelMeasurements ?? []).length > 0,
     },
     {
-      id: "level-photo",
-      status: levelRowsMissingPhotos.length === 0 ? "complete" : "missing",
-      text: "水準測量照片完整",
-      hint: levelRowsMissingPhotos.length ? `${levelRowsMissingPhotos.length} 個水準測點未上傳照片。` : "水準測量無缺照片測點。",
+      label: "附件六傾斜率測量已輸入",
+      done: (activeCase.tiltMeasurements ?? []).length > 0,
     },
-    {
-      id: "tilt-photo",
-      status: tiltRowsMissingPhotos.length === 0 ? "complete" : "missing",
-      text: "傾斜測量照片完整",
-      hint: tiltRowsMissingPhotos.length ? `${tiltRowsMissingPhotos.length} 個傾斜測線缺 A/B 照片。` : "傾斜測量無缺照片測線。",
-    },
-  ] satisfies Array<{ id: string; status: "complete" | "missing"; text: string; hint: string }>;
-  const completedCount = checklist.filter((item) => item.status === "complete").length;
-  const progress = Math.round((completedCount / checklist.length) * 100);
+  ];
+  const doneCount = checks.filter((check) => check.done).length;
+  const pct = Math.round((doneCount / checks.length) * 100);
 
   return (
     <div className="grid gap-4">
       <Panel title="匯出前完成度檢查" icon={<FileText size={18} />}>
-        <div className="mb-4">
-          <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-            <span className="font-semibold">目前完成度</span>
-            <span className="mono-data font-bold text-accent">{progress}%</span>
+        <div className="mb-5 rounded-xl border border-line bg-surface-soft p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold">報告完成度</p>
+            <span className={`text-sm font-bold ${pct === 100 ? "text-accent" : "text-orange-600"}`}>
+              {pct}%
+            </span>
           </div>
-          <div className="h-3 overflow-hidden rounded-full bg-stone-200">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${progress}%` }} />
+
+          <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-line">
+            <div
+              className={`h-full rounded-full transition-all ${pct === 100 ? "bg-accent" : "bg-orange-400"}`}
+              style={{ width: `${pct}%` }}
+            />
           </div>
-        </div>
-        <div className="grid gap-2 text-sm">
-          {checklist.map((item) => (
-            <ChecklistItem key={item.id} status={item.status} text={item.text} hint={item.hint} />
-          ))}
-          <ChecklistItem
-            status="warning"
-            text="附件八基地照片需於附件八畫面確認"
-            hint="基地照片目前由附件八編輯區管理，這裡先提示，不做實際完成度判斷。"
-          />
+
+          <ul className="space-y-2">
+            {checks.map((check) => (
+              <li key={check.label} className="flex items-center gap-2 text-sm">
+                {check.done ? (
+                  <CheckCircle2 size={16} className="shrink-0 text-accent" />
+                ) : (
+                  <Circle size={16} className="shrink-0 text-muted" />
+                )}
+                <span className={check.done ? "text-foreground" : "text-muted"}>{check.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </Panel>
       <Panel title="目前可匯出" icon={<FileText size={18} />}>
@@ -2074,36 +2047,9 @@ function ExportPanel({
           levelPlanPaths={activeCase.levelPlanPaths ?? []}
           tiltMeasurements={activeCase.tiltMeasurements ?? []}
           tiltPlanPaths={activeCase.tiltPlanPaths ?? []}
+          completionWarning={{ pct, doneCount, total: checks.length }}
         />
       </Panel>
-    </div>
-  );
-}
-
-function ChecklistItem({
-  status,
-  text,
-  hint,
-}: {
-  status: "complete" | "warning" | "missing";
-  text: string;
-  hint: string;
-}) {
-  const Icon = status === "complete" ? CheckCircle2 : status === "warning" ? AlertTriangle : Circle;
-  const colorClass =
-    status === "complete"
-      ? "border-green-100 bg-green-50 text-green-700"
-      : status === "warning"
-        ? "border-orange-100 bg-orange-50 text-orange-700"
-        : "border-line bg-white text-muted";
-
-  return (
-    <div className={`flex items-start gap-3 rounded-md border p-3 ${colorClass}`}>
-      <Icon size={18} className="mt-0.5 shrink-0" />
-      <div>
-        <div className="font-semibold">{text}</div>
-        <div className="mt-1 text-xs opacity-80">{hint}</div>
-      </div>
     </div>
   );
 }

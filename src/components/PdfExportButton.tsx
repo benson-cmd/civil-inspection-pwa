@@ -14,6 +14,11 @@ interface PdfExportButtonProps {
   levelPlanPaths?: string[];
   tiltMeasurements?: TiltMeasurement[];
   tiltPlanPaths?: string[];
+  completionWarning?: {
+    pct: number;
+    doneCount: number;
+    total: number;
+  };
 }
 
 export function PdfExportButton({
@@ -26,6 +31,7 @@ export function PdfExportButton({
   levelPlanPaths = [],
   tiltMeasurements = [],
   tiltPlanPaths = [],
+  completionWarning,
 }: PdfExportButtonProps) {
   const checklist = buildExportChecklist({
     project,
@@ -42,12 +48,18 @@ export function PdfExportButton({
       type="button"
       className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white shadow-sm"
       onClick={() => {
-        const checklistText = checklist
-          .map((item) => `${item.status === "complete" ? "✓" : "⚠"} ${item.label}${item.detail ? `：${item.detail}` : ""}`)
-          .join("\n");
-        const shouldContinue =
-          failedItems.length === 0 ||
-          window.confirm(`匯出前檢查清單：\n\n${checklistText}\n\n仍要開啟 PDF 預覽嗎？`);
+        let shouldContinue = true;
+
+        if (completionWarning && completionWarning.doneCount < completionWarning.total) {
+          shouldContinue = window.confirm(
+            `報告完成度 ${completionWarning.pct}%，有 ${completionWarning.total - completionWarning.doneCount} 個項目尚未填寫，確定要匯出嗎？`,
+          );
+        } else if (!completionWarning && failedItems.length > 0) {
+          const checklistText = checklist
+            .map((item) => `${item.status === "complete" ? "✓" : "⚠"} ${item.label}${item.detail ? `：${item.detail}` : ""}`)
+            .join("\n");
+          shouldContinue = window.confirm(`匯出前檢查清單：\n\n${checklistText}\n\n仍要開啟 PDF 預覽嗎？`);
+        }
 
         if (!shouldContinue) return;
 
@@ -97,9 +109,9 @@ function buildExportChecklist({
   tiltMeasurements: TiltMeasurement[];
 }) {
   const basicFields = [project.caseNo, project.projectName, project.applicantName, project.inspectionDate];
-  const missingPhotoPoints = points.filter((point) => !point.photo?.imageUrl);
+  const missingPhotoPoints = points.filter((point) => !point.inaccessible && !point.photo?.imageUrl);
   const missingCrackWidths = points.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
-  const missingCaptions = points.filter((point) => !point.photo?.caption && !point.note.trim());
+  const missingCaptions = points.filter((point) => !point.inaccessible && !point.photo?.caption && !point.note.trim());
   const levelRowsMissingPhotos = levelMeasurements.filter((row) => (row.pointNo || row.location || row.relativeElevation) && !row.photo?.imageUrl);
   const tiltRowsMissingPhotos = tiltMeasurements.filter(
     (row) => (row.lineNo || row.location || row.floorHeight) && (!row.upperPhoto?.imageUrl || !row.lowerPhoto?.imageUrl),
