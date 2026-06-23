@@ -8,6 +8,7 @@ export interface Project {
   id: string;
   caseNo: string;
   projectName: string;
+  workName?: string;
   applicantName: string;
   inspectionType: string;
   inspectionDate: string;

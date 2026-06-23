@@ -34,6 +34,7 @@ create table if not exists public.ci_projects (
   id uuid primary key default gen_random_uuid(),
   case_no text not null,
   project_name text not null,
+  work_name text,
   applicant_name text,
   applicant_address text,
   applicant_phone text,

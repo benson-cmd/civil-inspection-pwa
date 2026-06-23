@@ -26,6 +26,7 @@ type ProjectRow = {
   id: string;
   case_no: string;
   project_name: string;
+  work_name: string | null;
   applicant_name: string | null;
   applicant_address: string | null;
   applicant_phone: string | null;
@@ -402,6 +403,7 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     id: project.id,
     case_no: project.caseNo,
     project_name: project.projectName,
+    work_name: project.workName ?? "",
     applicant_name: project.applicantName,
     applicant_address: project.applicantAddress ?? "",
     applicant_phone: project.applicantPhone ?? "",
@@ -426,12 +428,14 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     if (
       String(projectError.message).includes("report_status") ||
       String(projectError.message).includes("level_plan_paths") ||
-      String(projectError.message).includes("tilt_plan_paths")
+      String(projectError.message).includes("tilt_plan_paths") ||
+      String(projectError.message).includes("work_name")
     ) {
       const {
         report_status: _reportStatus,
         level_plan_paths: _levelPlanPaths,
         tilt_plan_paths: _tiltPlanPaths,
+        work_name: _workName,
         ...legacyProjectPayload
       } = projectPayload;
       const { error: legacyProjectError } = await supabase.from("ci_projects").upsert(legacyProjectPayload, { onConflict: "id" });
@@ -756,6 +760,7 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
     id: row.id,
     caseNo: row.case_no,
     projectName: row.project_name,
+    workName: row.work_name ?? "",
     applicantName: row.applicant_name ?? "",
     applicantAddress: row.applicant_address ?? "",
     applicantPhone: row.applicant_phone ?? "",

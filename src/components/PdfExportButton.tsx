@@ -108,7 +108,7 @@ function buildExportChecklist({
   levelMeasurements: LevelMeasurement[];
   tiltMeasurements: TiltMeasurement[];
 }) {
-  const basicFields = [project.caseNo, project.projectName, project.applicantName, project.inspectionDate];
+  const basicFields = [project.caseNo, project.workName, project.projectName, project.applicantName, project.inspectionDate];
   const missingPhotoPoints = points.filter((point) => !point.inaccessible && !point.photo?.imageUrl);
   const missingCrackWidths = points.filter((point) => point.conditionType.includes("裂縫") && point.crackWidthMm == null);
   const missingCaptions = points.filter((point) => !point.inaccessible && !point.photo?.caption && !point.note.trim());
@@ -122,7 +122,7 @@ function buildExportChecklist({
     {
       label: "基本資料是否完整",
       status: basicFields.every((value) => value?.trim()) ? "complete" : "missing",
-      detail: "需填案件編號、案件名稱、申請單位、鑑定日期",
+      detail: "需填案件編號、工程名稱、案件名稱、申請單位、鑑定日期",
     },
     {
       label: "標的物是否有地址",

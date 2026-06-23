@@ -92,7 +92,8 @@ export default function HomePage() {
   const filteredCases = cases.filter(
     (item) =>
       item.project.caseNo.includes(caseSearch) ||
-      item.project.projectName.includes(caseSearch),
+      item.project.projectName.includes(caseSearch) ||
+      (item.project.workName ?? "").includes(caseSearch),
   );
   const supabaseEnabled = hasSupabaseEnv();
   const exportFloors = activeCase ? buildAttachmentSevenFloors(activeCase) : [];
@@ -598,6 +599,7 @@ export default function HomePage() {
                       </span>
                     </span>
                     <span className="block text-sm text-muted">{item.project.projectName}</span>
+                    {item.project.workName ? <span className="mt-1 block text-xs text-muted">工程：{item.project.workName}</span> : null}
                     <span className="mt-2 block text-xs text-muted">更新：{item.updatedAt.slice(0, 10)}</span>
                   </button>
                   <div className="mt-3 flex justify-end">
@@ -942,17 +944,58 @@ function formatCompactRocDate(date: string | undefined) {
   return `民國${parsed.getFullYear() - 1911}年${parsed.getMonth() + 1}月${parsed.getDate()}日`;
 }
 
+function buildDefaultReportName(workName: string) {
+  const normalized = workName.trim();
+  return normalized ? `${normalized}鄰房現況鑑定報告書` : "鄰房現況鑑定報告書";
+}
+
+function getReportTargets(activeCase: InspectionCase) {
+  return activeCase.attachmentSeven?.targets.length ? activeCase.attachmentSeven.targets : [activeCase.target];
+}
+
+function buildTargetLocationText(activeCase: InspectionCase) {
+  const summary = activeCase.project.targetSummary?.trim();
+  if (summary) return summary;
+
+  const addresses = getReportTargets(activeCase)
+    .map((target) => target.address.trim())
+    .filter(Boolean);
+  if (!addresses.length) return "請輸入標的物之坐落。";
+  return `${addresses.join("、")}共${addresses.length}門牌。`;
+}
+
+function buildTargetUsageText(activeCase: InspectionCase) {
+  const targets = getReportTargets(activeCase);
+  const rows = targets
+    .map((target, index) => {
+      const inaccessible = target.surveyStatus.includes("拒絕鑑定") || target.surveyStatus.includes("屢次造訪無人");
+      const usage = inaccessible ? "未能進入室內，故無法判斷" : target.usageType || "住宅";
+      return `${index + 1}. ${target.address || "尚未填寫地址"}：${usage}`;
+    })
+    .join("\n");
+
+  return `(一) 用途及現況：\n${rows || "尚未建立標的物資料。"}\n\n(二) 現況調查記錄：\n工地及鄰房相關之水準測量成果詳附件五。\n鄰房相關之傾斜測量之成果詳附件六。\n各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。`;
+}
+
 function buildBasicReportSectionContent(activeCase: InspectionCase): Record<string, string> {
   const project = activeCase.project;
   const applicationDate = formatCompactRocDate(project.inspectionDate) || "民國○○○年○月○日";
   const receivedDate = formatCompactRocDate(project.receivedDate) || "○○○年○月○日";
   const receivedNo = project.receivedNo?.trim() || "鑑○○○";
-  const targetLocation = project.targetSummary?.trim() || activeCase.target.address.trim() || "請輸入標的物之坐落。";
+  const workName = project.workName?.trim() || project.projectName;
+  const engineerNames = formatEngineerNames(project) || "○○○";
+  const targetCount = getReportTargets(activeCase).length;
 
   return {
-    applicant: `申請單位：${project.applicantName}\n連絡地址：${project.applicantAddress ?? ""}\n連絡電話：${project.applicantPhone ?? ""}\n連絡人 ︰${project.contactPerson ?? ""}`,
-    "application-date": `${applicationDate}\n(社團法人臺中市土木技師公會 ${receivedDate}收文號：${receivedNo})`,
-    "target-location": targetLocation,
+    applicant: `　　申請單位：${project.applicantName}\n　　連絡地址：${project.applicantAddress ?? ""}\n　　連絡電話：${project.applicantPhone ?? ""}\n　　連絡人　︰${project.contactPerson ?? ""}`,
+    "application-date": `　　${applicationDate}\n　　(社團法人臺中市土木技師公會${receivedDate}收文號：${receivedNo})`,
+    "target-location": buildTargetLocationText(activeCase),
+    purpose: `申請單位${project.applicantName}將進行${workName}，為顧及日後施工若引起損鄰事件，可能引起之損鄰糾紛暨有關責任歸屬之釐清，於${applicationDate}，函請本公會辦理鄰房現況鑑定(詳附件一)。`,
+    staff: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${engineerNames}　技師\n所有權人代表：詳附件三。`,
+    process: `申請人於${applicationDate}向本會提出本案施工前之鄰房現況鑑定申請(本會收文號${receivedNo})，本會即指派${engineerNames}技師負責辦理本案建築物現況鑑定工作。本會鑑定技師依照會勘通知函時間前往現場進行會勘作業。\n\n鑑定技師將可見範圍內鑑定標的物之裂縫及瑕疵等現況拍照、繪製圖說並做成紀錄(詳附件七)。本案目前已建立${targetCount}戶鑑定標的物資料，水準測量成果詳附件五，傾斜率測量成果詳附件六。`,
+    "site-status": "本案會勘時，工程尚未施工(詳附件八)。",
+    "target-status": buildTargetUsageText(activeCase),
+    attachments: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
   };
 }
 
@@ -1200,6 +1243,7 @@ function CaseHeader({ activeCase, onChange }: { activeCase: InspectionCase; onCh
           <p className="mono-data mt-1 text-sm text-muted">
             {activeCase.project.caseNo} / {activeCase.project.applicantName} / {activeCase.project.inspectionDate}
           </p>
+          {activeCase.project.workName ? <p className="mt-1 text-sm text-muted">工程名稱：{activeCase.project.workName}</p> : null}
         </div>
         <label className="grid gap-1 rounded-md border border-line bg-white px-3 py-2 text-sm">
           <span className="font-semibold text-muted">報告狀態</span>
@@ -1227,6 +1271,18 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
 
   function updateProject(patch: Partial<Project>) {
     onChange({ ...activeCase, project: { ...project, ...patch } });
+  }
+
+  function updateWorkName(workName: string) {
+    const previousAutoName = buildDefaultReportName(project.workName ?? "");
+    const shouldRefreshReportName =
+      !project.projectName.trim() ||
+      project.projectName === "鄰房現況鑑定報告書" ||
+      project.projectName === previousAutoName;
+    updateProject({
+      workName,
+      projectName: shouldRefreshReportName ? buildDefaultReportName(workName) : project.projectName,
+    });
   }
 
   function updateTarget(patch: Partial<Target>) {
@@ -1272,7 +1328,8 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
       <Panel title="案件基本資料" icon={<ClipboardList size={18} />}>
         <div className="grid gap-3 md:grid-cols-2">
           <TextField label="案件編號" value={project.caseNo} onChange={(caseNo) => updateProject({ caseNo })} />
-          <TextField label="案件名稱" value={project.projectName} onChange={(projectName) => updateProject({ projectName })} />
+          <TextField label="工程名稱" value={project.workName ?? ""} onChange={updateWorkName} />
+          <TextField label="案件/報告名稱" value={project.projectName} onChange={(projectName) => updateProject({ projectName })} className="md:col-span-2" />
           <TextField label="申請單位" value={project.applicantName} onChange={(applicantName) => updateProject({ applicantName })} />
           <TextField label="連絡人" value={project.contactPerson ?? ""} onChange={(contactPerson) => updateProject({ contactPerson })} />
           <div className="md:col-span-2">
@@ -1384,6 +1441,7 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
       <Panel title="封面自動帶入欄位" icon={<FileText size={18} />}>
         <div className="grid gap-2 text-sm md:grid-cols-2">
           <InfoLine label="申請人" value={activeCase.project.applicantName} />
+          <InfoLine label="工程名稱" value={activeCase.project.workName || "尚未填寫"} />
           <InfoLine label="案件名稱" value={activeCase.project.projectName} />
           <InfoLine label="案件編號" value={activeCase.project.caseNo} />
           <InfoLine label="鑑定技師" value={getProjectEngineers(activeCase.project).map((engineer) => engineer.name).filter(Boolean).join("、") || "尚未填寫"} />
@@ -1405,15 +1463,15 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
         <div className="grid gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-soft p-3">
             <div>
-              <p className="text-sm font-semibold">基本資料同步</p>
-              <p className="mt-1 text-xs text-muted">重新帶入一、二、三節，會覆蓋這三節目前文字；四以後手動內容不受影響。</p>
+              <p className="text-sm font-semibold">報告主文自動成稿</p>
+              <p className="mt-1 text-xs text-muted">依基本資料、技師名單與附件七標的物資料產生主文草稿；會覆蓋可自動生成章節目前文字。</p>
             </div>
             <button
               type="button"
               onClick={syncBasicSections}
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-accent bg-white px-3 text-sm font-semibold text-accent transition-colors hover:bg-[#f0faf4]"
             >
-              重新帶入基本資料
+              自動完成主文
             </button>
           </div>
           {activeCase.reportSections.map((section) => (
@@ -1426,7 +1484,7 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
                     onClick={() => syncSingleBasicSection(section.id)}
                     className="rounded-md border border-line bg-white px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-accent hover:text-accent"
                   >
-                    帶入基本資料
+                    重新產生本節
                   </button>
                 ) : null}
               </span>
@@ -2140,6 +2198,10 @@ function ExportPanel({
     {
       label: "案件編號已填寫",
       done: !!activeCase.project.caseNo.trim(),
+    },
+    {
+      label: "工程名稱已填寫",
+      done: !!activeCase.project.workName?.trim(),
     },
     {
       label: "鑑定技師已填寫",
