@@ -935,6 +935,27 @@ function formatRocDate(date: string | undefined) {
   return `中 華 民 國 ${parsed.getFullYear() - 1911} 年 ${parsed.getMonth() + 1} 月 ${parsed.getDate()} 日`;
 }
 
+function formatCompactRocDate(date: string | undefined) {
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `民國${parsed.getFullYear() - 1911}年${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+}
+
+function buildBasicReportSectionContent(activeCase: InspectionCase): Record<string, string> {
+  const project = activeCase.project;
+  const applicationDate = formatCompactRocDate(project.inspectionDate) || "民國○○○年○月○日";
+  const receivedDate = formatCompactRocDate(project.receivedDate) || "○○○年○月○日";
+  const receivedNo = project.receivedNo?.trim() || "鑑○○○";
+  const targetLocation = project.targetSummary?.trim() || activeCase.target.address.trim() || "請輸入標的物之坐落。";
+
+  return {
+    applicant: `申請單位：${project.applicantName}\n連絡地址：${project.applicantAddress ?? ""}\n連絡電話：${project.applicantPhone ?? ""}\n連絡人 ︰${project.contactPerson ?? ""}`,
+    "application-date": `${applicationDate}\n(社團法人臺中市土木技師公會 ${receivedDate}收文號：${receivedNo})`,
+    "target-location": targetLocation,
+  };
+}
+
 function UserManagementPanel({
   users,
   onChange,
@@ -1332,6 +1353,7 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
 function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
   const engineerSignature = buildEngineerSignature(activeCase.project);
   const finalDateText = formatRocDate(activeCase.project.finalDate);
+  const basicSectionContent = buildBasicReportSectionContent(activeCase);
 
   function updateSection(sectionId: string, content: string) {
     onChange({
@@ -1340,6 +1362,21 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
         section.id === sectionId ? { ...section, content } : section,
       ),
     });
+  }
+
+  function syncBasicSections() {
+    onChange({
+      ...activeCase,
+      reportSections: activeCase.reportSections.map((section) =>
+        basicSectionContent[section.id] ? { ...section, content: basicSectionContent[section.id] } : section,
+      ),
+    });
+  }
+
+  function syncSingleBasicSection(sectionId: string) {
+    const content = basicSectionContent[sectionId];
+    if (!content) return;
+    updateSection(sectionId, content);
   }
 
   return (
@@ -1366,9 +1403,33 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
 
       <Panel title="主文編輯" icon={<FileText size={18} />}>
         <div className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-soft p-3">
+            <div>
+              <p className="text-sm font-semibold">基本資料同步</p>
+              <p className="mt-1 text-xs text-muted">重新帶入一、二、三節，會覆蓋這三節目前文字；四以後手動內容不受影響。</p>
+            </div>
+            <button
+              type="button"
+              onClick={syncBasicSections}
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-accent bg-white px-3 text-sm font-semibold text-accent transition-colors hover:bg-[#f0faf4]"
+            >
+              重新帶入基本資料
+            </button>
+          </div>
           {activeCase.reportSections.map((section) => (
             <label key={section.id} className="block">
-              <span className="mb-1 block text-base font-bold">{section.title}</span>
+              <span className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-base font-bold">{section.title}</span>
+                {basicSectionContent[section.id] ? (
+                  <button
+                    type="button"
+                    onClick={() => syncSingleBasicSection(section.id)}
+                    className="rounded-md border border-line bg-white px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-accent hover:text-accent"
+                  >
+                    帶入基本資料
+                  </button>
+                ) : null}
+              </span>
               <textarea
                 value={section.content}
                 onChange={(event) => updateSection(section.id, event.target.value)}

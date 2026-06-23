@@ -62,6 +62,10 @@ export function createCase(userId: string): InspectionCase {
 }
 
 export function createDefaultSections(project: Project): ReportSection[] {
+  const applicationDate = formatCompactRocDate(project.inspectionDate) || "民國○○○年○月○日";
+  const receivedDate = formatCompactRocDate(project.receivedDate) || "○○○年○月○日";
+  const receivedNo = project.receivedNo?.trim() || "鑑○○○";
+
   return [
     {
       id: "applicant",
@@ -77,7 +81,7 @@ export function createDefaultSections(project: Project): ReportSection[] {
       title: "二、申請日期",
       source: "basic",
       fixedTitle: true,
-      content: `民國○○○年○月○日\n(社團法人臺中市土木技師公會 ○○○年○月○日收文號：鑑○○○)`,
+      content: `${applicationDate}\n(社團法人臺中市土木技師公會 ${receivedDate}收文號：${receivedNo})`,
     },
     {
       id: "target-location",
@@ -124,6 +128,13 @@ export function createDefaultSections(project: Project): ReportSection[] {
       content: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
     },
   ];
+}
+
+function formatCompactRocDate(date: string | undefined) {
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `民國${parsed.getFullYear() - 1911}年${parsed.getMonth() + 1}月${parsed.getDate()}日`;
 }
 
 export function createDefaultAttachments(): AttachmentSlot[] {
