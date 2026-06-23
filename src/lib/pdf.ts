@@ -36,7 +36,7 @@ export function buildReportHtml(input: {
   const reportBody = [
     buildCoverPage(project),
     buildTableOfContentsPage(reportSections),
-    ...buildMainReportPages(reportSections),
+    ...buildMainReportPages(project, reportSections),
   ].join("");
   const attachmentBody = [
     buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
@@ -101,7 +101,13 @@ function buildTableOfContentsPage(sections: ReportSection[]) {
       <table class="toc-table">
         <tbody>
           ${effectiveSections
-            .map((section) => `<tr><td>${escapeHtml(section.title)}${"-".repeat(Math.max(22, 34 - section.title.length))}</td><td>${mainSectionPage(section.order)}</td></tr>`)
+            .map(
+              (section) => `
+                <tr>
+                  <td><span class="toc-line"><span>${escapeHtml(section.title)}</span><span class="toc-leader"></span></span></td>
+                  <td>${mainSectionPage(section.order)}</td>
+                </tr>`,
+            )
             .join("")}
           <tr><td class="toc-attachment-title">附件一　鑑定申請書及建造執照</td><td></td></tr>
           <tr><td class="toc-attachment-title">附件二　會勘通知函</td><td></td></tr>
@@ -116,17 +122,27 @@ function buildTableOfContentsPage(sections: ReportSection[]) {
     </section>`;
 }
 
-function buildMainReportPages(sections: ReportSection[]) {
+function buildMainReportPages(project: Project, sections: ReportSection[]) {
   const effectiveSections = sections.length ? sections : defaultReportSections();
-  return chunk(effectiveSections, 4).map(
+  return groupMainSections(effectiveSections).map(
     (pageSections, pageIndex) => `
       <section class="page report-text-page main-report-page">
         ${buildAssociationHeader()}
-        ${pageIndex === 0 ? buildMainTitleBlock(sections) : ""}
+        ${pageIndex === 0 ? buildMainTitleBlock(project) : ""}
         ${pageSections.map((section) => buildMainSection(section)).join("")}
         <div class="main-page-number">${pageIndex + 1}</div>
       </section>`,
   );
+}
+
+function groupMainSections(sections: ReportSection[]) {
+  const orderedSections = [...sections].sort((a, b) => a.order - b.order);
+  return [
+    orderedSections.filter((section) => section.order >= 1 && section.order <= 4),
+    orderedSections.filter((section) => section.order >= 5 && section.order <= 8),
+    orderedSections.filter((section) => section.order >= 9 && section.order <= 11),
+    orderedSections.filter((section) => section.order > 11),
+  ].filter((pageSections) => pageSections.length);
 }
 
 function buildEmptyReportPage(project: Project) {
@@ -152,13 +168,16 @@ function buildAssociationHeader() {
     </div>`;
 }
 
-function buildMainTitleBlock(sections: ReportSection[]) {
-  const applicant = findSectionContent(sections, "applicant").match(/申請單位[：:](.*)/)?.[1]?.trim() ?? "";
-  const caseNo = "";
+function buildMainTitleBlock(project: Project) {
+  const workName = project.workName?.trim() || project.projectName || "";
+  const reportTitle = normalizeReportTitle(project.projectName, workName);
   return `
     <div class="main-title-block">
-      ${applicant ? `<div>${escapeHtml(applicant)}</div>` : ""}
-      ${caseNo ? `<div>${escapeHtml(caseNo)}</div>` : ""}
+      ${project.applicantName ? `<div>${escapeHtml(project.applicantName)}</div>` : ""}
+      ${workName ? `<div>${escapeHtml(workName)}</div>` : ""}
+      <div>${escapeHtml(reportTitle)}</div>
+      ${project.caseNo ? `<div>(案件編號：${escapeHtml(project.caseNo)})</div>` : ""}
+      <div>【全壹冊】</div>
     </div>`;
 }
 
@@ -170,10 +189,6 @@ function buildMainSection(section: ReportSection) {
     </section>`;
 }
 
-function findSectionContent(sections: ReportSection[], id: string) {
-  return sections.find((section) => section.id === id)?.content ?? "";
-}
-
 function normalizeReportTitle(projectName: string, workName: string) {
   const trimmed = projectName.trim();
   const withoutWorkName = trimmed.startsWith(workName) ? trimmed.slice(workName.length).trim() : trimmed;
@@ -183,8 +198,8 @@ function normalizeReportTitle(projectName: string, workName: string) {
 
 function mainSectionPage(order: number) {
   if (order <= 4) return 1;
-  if (order <= 7) return 2;
-  if (order <= 10) return 3;
+  if (order <= 8) return 2;
+  if (order <= 11) return 3;
   return 4;
 }
 
@@ -367,11 +382,16 @@ function buildInspectionTablePage(
   const rows = [...points, ...Array.from({ length: Math.max(0, 20 - points.length) }, () => null)]
     .map((point) => {
       if (!point) {
-        return `<tr>${Array.from({ length: 15 }, () => "<td>&nbsp;</td>").join("")}</tr>`;
+        return `<tr>${Array.from({ length: 14 }, () => "<td>&nbsp;</td>").join("")}</tr>`;
       }
 
       const has = (label: string, values: string[]) => (values.includes(label) ? "✔" : "");
-      const note = point.inaccessible ? `不便進入／拍照${point.note ? `；${point.note}` : ""}` : point.note;
+      const floorName = findFloorName(floors, point.floorId);
+      const note = [
+        floorName,
+        point.inaccessible ? "不便進入／拍照" : "",
+        point.note,
+      ].filter(Boolean).join("；");
       return `
         <tr>
           <td>${escapeHtml(point.photoNo)}</td>
@@ -388,7 +408,6 @@ function buildInspectionTablePage(
           <td>${has("滲水", point.conditionType)}</td>
           <td>${has("剝落", point.conditionType)}</td>
           <td>${escapeHtml(note)}</td>
-          <td>${escapeHtml(findFloorName(floors, point.floorId))}</td>
         </tr>`;
     })
     .join("");
@@ -402,23 +421,23 @@ function buildInspectionTablePage(
         <tbody>
           <tr>
             <th class="label-cell">標的物之座落</th>
-            <td colspan="14" class="text-left">${escapeHtml(target.address)}</td>
+            <td colspan="13" class="text-left">${escapeHtml(target.address)}</td>
           </tr>
           <tr>
             <th class="label-cell">用途</th>
-            <td colspan="14" class="text-left">${renderChecks(usageOptions, target.usageType)}</td>
+            <td colspan="13" class="text-left">${renderChecks(usageOptions, target.usageType)}</td>
           </tr>
           <tr>
             <th class="label-cell">牆面</th>
-            <td colspan="14" class="text-left">${renderChecks(wallFinishOptions, target.wallFinish)}</td>
+            <td colspan="13" class="text-left">${renderChecks(wallFinishOptions, target.wallFinish)}</td>
           </tr>
           <tr>
             <th class="label-cell">平頂</th>
-            <td colspan="14" class="text-left">${renderChecks(ceilingFinishOptions, target.ceilingFinish)}</td>
+            <td colspan="13" class="text-left">${renderChecks(ceilingFinishOptions, target.ceilingFinish)}</td>
           </tr>
           <tr>
             <th class="label-cell">地坪</th>
-            <td colspan="14" class="text-left">${renderChecks(floorFinishOptions, target.floorFinish)}</td>
+            <td colspan="13" class="text-left">${renderChecks(floorFinishOptions, target.floorFinish)}</td>
           </tr>
           <tr>
             <th rowspan="2">照片<br>編號</th>
@@ -429,17 +448,16 @@ function buildInspectionTablePage(
             <th rowspan="2">滲<br>水</th>
             <th rowspan="2">剝<br>落</th>
             <th rowspan="2">備<br>註</th>
-            <th rowspan="2">樓層</th>
           </tr>
           <tr>
             <th>全景</th><th>牆面</th><th>平頂</th><th>地坪</th><th>梁</th><th>柱</th><th>其他</th>
           </tr>
           ${rows}
           <tr>
-            <td colspan="15" class="text-left status-line">★會 勘 狀 況：${renderChecks(surveyStatusOptions, target.surveyStatus, "■", "□")}</td>
+            <td colspan="14" class="text-left status-line">★會 勘 狀 況：${renderChecks(surveyStatusOptions, target.surveyStatus, "■", "□")}</td>
           </tr>
           <tr>
-            <td colspan="15" class="text-left note-box">※其 它 事 項：${escapeHtml(target.note)}</td>
+            <td colspan="14" class="text-left note-box">※其 它 事 項：${escapeHtml(target.note)}</td>
           </tr>
         </tbody>
       </table>
@@ -528,16 +546,18 @@ body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", 
 .association-header-en { font-family: "Times New Roman", serif; font-size: 13px; font-weight: 700; line-height: 1.2; }
 .association-header-address, .association-header-contact { font-size: 10px; line-height: 1.15; }
 .main-report-page { font-size: 17px; line-height: 1.75; }
-.main-title-block { margin: -4mm 0 8mm; text-align: center; font-size: 16px; line-height: 1.45; }
-.main-section { margin: 0 0 9mm; page-break-inside: avoid; }
-.main-section h2 { margin: 0 0 4mm; font-size: 18px; font-weight: 700; line-height: 1.4; }
+.main-title-block { margin: -4mm 0 6mm; text-align: center; font-size: 16px; line-height: 1.45; }
+.main-section { margin: 0 0 6mm; page-break-inside: avoid; }
+.main-section h2 { margin: 0 0 2mm; font-size: 18px; font-weight: 700; line-height: 1.4; }
 .main-section-content { padding-left: 10mm; white-space: normal; text-align: justify; }
 .main-section-content br { line-height: 1.7; }
 .main-page-number { position: absolute; bottom: 9mm; left: 0; right: 0; text-align: center; font-size: 12px; }
 .toc-page h1 { margin: 0 0 8mm; text-align: center; font-size: 24px; letter-spacing: 8px; }
 .toc-table { width: 100%; border-collapse: collapse; margin-top: 7mm; font-size: 16px; line-height: 1.25; }
-.toc-table td { padding: 2.3mm 0; vertical-align: top; }
+.toc-table td { padding: 2.1mm 0; vertical-align: top; }
 .toc-table td:last-child { width: 12mm; text-align: right; }
+.toc-line { display: flex; align-items: center; gap: 2mm; }
+.toc-leader { flex: 1; height: 0; border-bottom: 1px dashed #111; transform: translateY(-0.8mm); }
 .toc-attachment-title { padding-left: 13mm !important; font-size: 14px; }
 .footer { position: absolute; left: 0; right: 0; bottom: 8mm; text-align: center; font-size: 12px; }
 .top-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 19px; }
