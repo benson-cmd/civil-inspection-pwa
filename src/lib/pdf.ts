@@ -64,19 +64,30 @@ export function buildReportHtml(input: {
 
 function buildCoverPage(project: Project) {
   const engineers = parseEngineerNames(project);
+  const workName = project.workName?.trim() || project.projectName || "工程名稱";
+  const reportTitle = normalizeReportTitle(project.projectName, workName);
   return `
     <section class="page cover-page">
+      <img class="cover-logo" src="/tcea-logo.png" alt="社團法人臺中市土木技師公會" />
       <div class="cover-association">社團法人臺中市土木技師公會</div>
       <div class="cover-main">
-        <div class="cover-applicant">${escapeHtml(project.applicantName || "申請單位")}</div>
-        <h1>${escapeHtml(project.workName || project.projectName || "工程名稱")}</h1>
-        <h2>${escapeHtml(project.projectName || "鄰房現況鑑定報告書")}</h2>
-        <div class="cover-case">(案件編號：${escapeHtml(project.caseNo || "")})</div>
-        <div class="cover-volume">【全壹冊】</div>
+        <div class="cover-frame">
+          <div class="cover-applicant">${escapeHtml(project.applicantName || "申請單位")}</div>
+          <h1>${escapeHtml(workName)}</h1>
+          <h2>${escapeHtml(reportTitle)}</h2>
+          <div class="cover-case">(案件編號：${escapeHtml(project.caseNo || "")})</div>
+          <div class="cover-volume">【全壹冊】</div>
+        </div>
       </div>
       <div class="cover-meta">
-        <div>鑑定人：${escapeHtml(engineers || "　　　　")}　土木技師</div>
-        <div>日期：${formatDate(project.finalDate || project.inspectionDate)}</div>
+        <div class="cover-meta-row"><span>鑑 定 人：${escapeHtml(engineers || "　　　　")}</span><span>土木技師</span></div>
+        <div class="cover-meta-row"><span>日　　期：</span><span>年</span><span>月</span><span>日</span></div>
+        <div class="cover-meta-row"><span>文　　號：(115)中土鑑發字第</span><span>號</span></div>
+      </div>
+      <div class="cover-contact">
+        <div>會　　址：臺中市北區崇德路一段 629 號 B 棟 5 樓之 1</div>
+        <div class="cover-contact-grid"><span>郵遞區號:40452</span><span>電話: (04)2237-8968</span></div>
+        <div class="cover-contact-grid"><span></span><span>傳真: (04)2237-5789</span></div>
       </div>
     </section>`;
 }
@@ -84,13 +95,22 @@ function buildCoverPage(project: Project) {
 function buildTableOfContentsPage(sections: ReportSection[]) {
   const effectiveSections = sections.length ? sections : defaultReportSections();
   return `
-    <section class="page main-report-page toc-page">
+    <section class="page report-text-page toc-page">
+      ${buildAssociationHeader()}
       <h1>目　錄</h1>
       <table class="toc-table">
         <tbody>
           ${effectiveSections
-            .map((section, index) => `<tr><td>${escapeHtml(section.title)}</td><td>${index + 1}</td></tr>`)
+            .map((section) => `<tr><td>${escapeHtml(section.title)}${"-".repeat(Math.max(22, 34 - section.title.length))}</td><td>${mainSectionPage(section.order)}</td></tr>`)
             .join("")}
+          <tr><td class="toc-attachment-title">附件一　鑑定申請書及建造執照</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件二　會勘通知函</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件三　會勘紀錄表</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件四　工地及鑑定標的物位置圖</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件五　水準測量</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件六　傾斜率測量</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件七　鑑定標的物平面配置圖、現況調查紀錄表及照片</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件八　基地現況照片</td><td></td></tr>
         </tbody>
       </table>
     </section>`;
@@ -98,21 +118,74 @@ function buildTableOfContentsPage(sections: ReportSection[]) {
 
 function buildMainReportPages(sections: ReportSection[]) {
   const effectiveSections = sections.length ? sections : defaultReportSections();
-  return effectiveSections.map(
-    (section) => `
-      <section class="page main-report-page">
-        <h1>${escapeHtml(section.title)}</h1>
-        <div class="main-section-content">${escapeHtml(section.content || "尚未填寫。").replaceAll("\n", "<br>")}</div>
+  return chunk(effectiveSections, 4).map(
+    (pageSections, pageIndex) => `
+      <section class="page report-text-page main-report-page">
+        ${buildAssociationHeader()}
+        ${pageIndex === 0 ? buildMainTitleBlock(sections) : ""}
+        ${pageSections.map((section) => buildMainSection(section)).join("")}
+        <div class="main-page-number">${pageIndex + 1}</div>
       </section>`,
   );
 }
 
 function buildEmptyReportPage(project: Project) {
   return `
-    <section class="page main-report-page">
+    <section class="page report-text-page main-report-page">
+      ${buildAssociationHeader()}
       <h1>${escapeHtml(project.projectName || "現況鑑定報告書")}</h1>
       <div class="main-section-content">目前尚無可匯出的主文或附件資料，請先完成基本資料、主文或附件編輯。</div>
     </section>`;
+}
+
+function buildAssociationHeader() {
+  return `
+    <div class="association-header">
+      <img src="/tcea-logo.png" alt="臺中市土木技師公會" />
+      <div>
+        <div class="association-header-title">社團法人臺中市土木技師公會</div>
+        <div class="association-header-en">TAICHUNG PROFESSIONAL CIVIL ENGINEERS ASSOCIATION</div>
+        <div class="association-header-address">會址：台中市北區崇德路一段 629 號 B 棟 5F 之 1</div>
+        <div class="association-header-address">5F-1, No.629, Sec. 1, Chongde Rd., North Dist., Taichung City 404, Taiwan (R.O.C.)</div>
+        <div class="association-header-contact">TEL：04-22378968　FAX：04-22375789　E-mail：tcce100521@gmail.com</div>
+      </div>
+    </div>`;
+}
+
+function buildMainTitleBlock(sections: ReportSection[]) {
+  const applicant = findSectionContent(sections, "applicant").match(/申請單位[：:](.*)/)?.[1]?.trim() ?? "";
+  const caseNo = "";
+  return `
+    <div class="main-title-block">
+      ${applicant ? `<div>${escapeHtml(applicant)}</div>` : ""}
+      ${caseNo ? `<div>${escapeHtml(caseNo)}</div>` : ""}
+    </div>`;
+}
+
+function buildMainSection(section: ReportSection) {
+  return `
+    <section class="main-section">
+      <h2>${escapeHtml(section.title)}：</h2>
+      <div class="main-section-content">${escapeHtml(section.content || "尚未填寫。").replaceAll("\n", "<br>")}</div>
+    </section>`;
+}
+
+function findSectionContent(sections: ReportSection[], id: string) {
+  return sections.find((section) => section.id === id)?.content ?? "";
+}
+
+function normalizeReportTitle(projectName: string, workName: string) {
+  const trimmed = projectName.trim();
+  const withoutWorkName = trimmed.startsWith(workName) ? trimmed.slice(workName.length).trim() : trimmed;
+  if (!withoutWorkName || withoutWorkName === workName) return "鄰房現況鑑定報告書";
+  return withoutWorkName;
+}
+
+function mainSectionPage(order: number) {
+  if (order <= 4) return 1;
+  if (order <= 7) return 2;
+  if (order <= 10) return 3;
+  return 4;
 }
 
 function defaultReportSections(): ReportSection[] {
@@ -435,21 +508,37 @@ const reportCss = `
 @page { size: A4; margin: 0; }
 body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", "Microsoft JhengHei", serif; }
 .page { width: 210mm; min-height: 297mm; break-after: page; position: relative; padding: 14mm 18mm 16mm; box-sizing: border-box; background: white; overflow: hidden; }
-.cover-page { padding: 18mm 22mm; text-align: center; }
-.cover-association { margin-top: 4mm; font-size: 24px; letter-spacing: 2px; }
-.cover-main { margin-top: 38mm; line-height: 1.8; }
-.cover-applicant { font-size: 24px; font-weight: 700; }
-.cover-main h1 { margin: 8mm 0 0; font-size: 25px; font-weight: 700; line-height: 1.5; }
-.cover-main h2 { margin: 2mm 0; font-size: 30px; font-weight: 700; line-height: 1.45; }
-.cover-case, .cover-volume { font-size: 20px; font-weight: 700; }
-.cover-meta { position: absolute; left: 28mm; right: 28mm; bottom: 34mm; display: grid; gap: 8mm; text-align: left; font-size: 20px; line-height: 1.7; }
-.main-report-page { padding: 18mm 23mm 20mm; overflow: visible; font-size: 20px; line-height: 1.8; }
-.main-report-page h1 { margin: 0 0 8mm; font-size: 22px; font-weight: 700; line-height: 1.5; }
-.main-section-content { white-space: normal; text-align: justify; }
-.toc-page h1 { text-align: center; font-size: 26px; letter-spacing: 8px; }
-.toc-table { width: 100%; border-collapse: collapse; margin-top: 12mm; font-size: 19px; }
-.toc-table td { padding: 2.5mm 0; border-bottom: 1px dotted #777; }
-.toc-table td:last-child { width: 18mm; text-align: right; }
+.cover-page { padding: 16mm 22mm; text-align: center; }
+.cover-logo { display: block; width: 31mm; height: 31mm; object-fit: contain; margin: 18mm auto 5mm; }
+.cover-association { font-size: 24px; letter-spacing: 3px; }
+.cover-main { margin-top: 18mm; line-height: 1.65; }
+.cover-frame { width: 124mm; min-height: 62mm; margin: 0 auto; padding: 11mm 8mm 8mm; border: 3px dotted #111; box-sizing: border-box; }
+.cover-applicant { font-size: 18px; font-weight: 700; }
+.cover-main h1 { margin: 4mm 0 0; font-size: 18px; font-weight: 700; line-height: 1.45; }
+.cover-main h2 { margin: 2mm 0; font-size: 19px; font-weight: 700; line-height: 1.45; }
+.cover-case, .cover-volume { font-size: 18px; font-weight: 700; }
+.cover-meta { position: absolute; left: 47mm; right: 38mm; bottom: 74mm; display: grid; gap: 6mm; text-align: left; font-size: 19px; line-height: 1.7; }
+.cover-meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16mm; white-space: nowrap; }
+.cover-contact { position: absolute; left: 45mm; right: 34mm; bottom: 24mm; display: grid; gap: 6mm; text-align: left; font-size: 16px; line-height: 1.4; }
+.cover-contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12mm; }
+.report-text-page { padding: 15mm 23mm 20mm; overflow: hidden; font-size: 18px; line-height: 1.75; }
+.association-header { display: grid; grid-template-columns: 22mm 1fr; align-items: center; column-gap: 5mm; color: #e00; text-align: center; margin-bottom: 12mm; }
+.association-header img { width: 18mm; height: 18mm; object-fit: contain; justify-self: end; }
+.association-header-title { font-size: 26px; font-weight: 700; letter-spacing: 2px; line-height: 1.15; }
+.association-header-en { font-family: "Times New Roman", serif; font-size: 13px; font-weight: 700; line-height: 1.2; }
+.association-header-address, .association-header-contact { font-size: 10px; line-height: 1.15; }
+.main-report-page { font-size: 17px; line-height: 1.75; }
+.main-title-block { margin: -4mm 0 8mm; text-align: center; font-size: 16px; line-height: 1.45; }
+.main-section { margin: 0 0 9mm; page-break-inside: avoid; }
+.main-section h2 { margin: 0 0 4mm; font-size: 18px; font-weight: 700; line-height: 1.4; }
+.main-section-content { padding-left: 10mm; white-space: normal; text-align: justify; }
+.main-section-content br { line-height: 1.7; }
+.main-page-number { position: absolute; bottom: 9mm; left: 0; right: 0; text-align: center; font-size: 12px; }
+.toc-page h1 { margin: 0 0 8mm; text-align: center; font-size: 24px; letter-spacing: 8px; }
+.toc-table { width: 100%; border-collapse: collapse; margin-top: 7mm; font-size: 16px; line-height: 1.25; }
+.toc-table td { padding: 2.3mm 0; vertical-align: top; }
+.toc-table td:last-child { width: 12mm; text-align: right; }
+.toc-attachment-title { padding-left: 13mm !important; font-size: 14px; }
 .footer { position: absolute; left: 0; right: 0; bottom: 8mm; text-align: center; font-size: 12px; }
 .top-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 19px; }
 .top-row h1 { margin: 8mm 0 6mm 10mm; font-size: 20px; font-weight: 400; }
