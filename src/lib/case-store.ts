@@ -18,7 +18,9 @@ import type {
   ReportSection,
   ReportStatus,
   SitePhoto,
+  SurveyDate,
   Target,
+  TargetListItem,
   TiltMeasurement,
 } from "@/types/inspection";
 
@@ -38,6 +40,11 @@ type ProjectRow = {
   received_no: string | null;
   final_date: string | null;
   target_summary: string | null;
+  survey_dates: SurveyDate[] | null;
+  county_city: string | null;
+  site_status_note: string | null;
+  process_note: string | null;
+  target_list: TargetListItem[] | null;
   engineer_names: string | null;
   association_engineers: string | null;
   level_plan_paths?: string[] | null;
@@ -187,7 +194,7 @@ const sectionIdsByOrder = [
   "target-location",
   "purpose",
   "basis",
-  "inspection-dates",
+  "survey-dates",
   "staff",
   "process",
   "site-status",
@@ -416,6 +423,11 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     received_no: project.receivedNo ?? "",
     final_date: project.finalDate || null,
     target_summary: project.targetSummary ?? "",
+    survey_dates: project.surveyDates ?? [],
+    county_city: project.countyCity ?? "",
+    site_status_note: project.siteStatusNote ?? "",
+    process_note: project.processNote ?? "",
+    target_list: project.targetList ?? [],
     engineer_names: JSON.stringify(project.engineers ?? []),
     association_engineers: project.associationEngineers ?? "",
     level_plan_paths: inspectionCase.levelPlanPaths ?? [],
@@ -432,7 +444,12 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
       String(projectError.message).includes("level_plan_paths") ||
       String(projectError.message).includes("tilt_plan_paths") ||
       String(projectError.message).includes("work_name") ||
-      String(projectError.message).includes("final_date")
+      String(projectError.message).includes("final_date") ||
+      String(projectError.message).includes("survey_dates") ||
+      String(projectError.message).includes("county_city") ||
+      String(projectError.message).includes("site_status_note") ||
+      String(projectError.message).includes("process_note") ||
+      String(projectError.message).includes("target_list")
     ) {
       const {
         report_status: _reportStatus,
@@ -440,6 +457,11 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
         tilt_plan_paths: _tiltPlanPaths,
         work_name: _workName,
         final_date: _finalDate,
+        survey_dates: _surveyDates,
+        county_city: _countyCity,
+        site_status_note: _siteStatusNote,
+        process_note: _processNote,
+        target_list: _targetList,
         ...legacyProjectPayload
       } = projectPayload;
       const { error: legacyProjectError } = await supabase.from("ci_projects").upsert(legacyProjectPayload, { onConflict: "id" });
@@ -776,6 +798,11 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
     receivedNo: row.received_no ?? "",
     finalDate: row.final_date ?? "",
     targetSummary: row.target_summary ?? "",
+    surveyDates: normalizeSurveyDates(row.survey_dates),
+    countyCity: row.county_city ?? "",
+    siteStatusNote: row.site_status_note ?? "",
+    processNote: row.process_note ?? "",
+    targetList: normalizeTargetList(row.target_list),
     engineers: parseEngineers(row.engineer_names),
     engineerNames: "",
     associationEngineers: row.association_engineers ?? "",
@@ -1040,6 +1067,44 @@ function mergeAttachments(rows: AttachmentRow[]): AttachmentSlot[] {
       fileName: row.file_path ?? undefined,
     };
   });
+}
+
+function normalizeSurveyDates(value: SurveyDate[] | null): SurveyDate[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is SurveyDate => {
+      return (
+        item != null &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        typeof item.date === "string" &&
+        typeof item.timeRange === "string"
+      );
+    })
+    .map((item) => ({
+      id: item.id,
+      date: item.date,
+      timeRange: item.timeRange,
+    }));
+}
+
+function normalizeTargetList(value: TargetListItem[] | null): TargetListItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is TargetListItem => {
+      return (
+        item != null &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        typeof item.address === "string" &&
+        typeof item.usage === "string"
+      );
+    })
+    .map((item) => ({
+      id: item.id,
+      address: item.address,
+      usage: item.usage,
+    }));
 }
 
 function parseEngineers(value: string | null): ProjectEngineer[] {

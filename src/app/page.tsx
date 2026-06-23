@@ -58,7 +58,9 @@ import type {
   ProjectEngineer,
   ReportStatus,
   SitePhoto,
+  SurveyDate,
   Target,
+  TargetListItem,
 } from "@/types/inspection";
 
 type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
@@ -965,16 +967,24 @@ function buildTargetLocationText(activeCase: InspectionCase) {
 }
 
 function buildTargetUsageText(activeCase: InspectionCase) {
+  const targetListItems = activeCase.project.targetList ?? [];
+  if (targetListItems.length) {
+    const usageRows = targetListItems
+      .map((item, index) => `${index + 1}　${item.address || "尚未填寫地址"}　${item.usage || "住宅"}`)
+      .join("\n");
+    return `（一）用途及現況：\n${usageRows}\n\n（二）現況調查記錄：\n工地及鄰房相關之水準測量成果詳附件五。\n鄰房相關之傾斜測量之成果詳附件六。\n各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。`;
+  }
+
   const targets = getReportTargets(activeCase);
   const rows = targets
     .map((target, index) => {
       const inaccessible = target.surveyStatus.includes("拒絕鑑定") || target.surveyStatus.includes("屢次造訪無人");
       const usage = inaccessible ? "未能進入室內，故無法判斷" : target.usageType || "住宅";
-      return `${index + 1}. ${target.address || "尚未填寫地址"}：${usage}`;
+      return `${index + 1}　${target.address || "尚未填寫地址"}　${usage}`;
     })
     .join("\n");
 
-  return `(一) 用途及現況：\n${rows || "尚未建立標的物資料。"}\n\n(二) 現況調查記錄：\n工地及鄰房相關之水準測量成果詳附件五。\n鄰房相關之傾斜測量之成果詳附件六。\n各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。`;
+  return `（一）用途及現況：\n${rows || "尚未建立標的物資料。"}\n\n（二）現況調查記錄：\n工地及鄰房相關之水準測量成果詳附件五。\n鄰房相關之傾斜測量之成果詳附件六。\n各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。`;
 }
 
 function buildBasicReportSectionContent(activeCase: InspectionCase): Record<string, string> {
@@ -985,15 +995,36 @@ function buildBasicReportSectionContent(activeCase: InspectionCase): Record<stri
   const workName = project.workName?.trim() || project.projectName;
   const engineerNames = formatEngineerNames(project) || "○○○";
   const targetCount = getReportTargets(activeCase).length;
+  const ordinal = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  const surveyDates = project.surveyDates ?? [];
+  const surveyDatesText = surveyDates.length
+    ? surveyDates
+        .map((surveyDate, index) => {
+          const dateText = formatCompactRocDate(surveyDate.date) || "○○年○月○日";
+          return `第${ordinal[index] ?? index + 1}次：${dateText}${surveyDate.timeRange ? `　${surveyDate.timeRange}` : ""}`;
+        })
+        .join("\n")
+    : "（請至基本資料填寫會勘日期）";
+  const targetList = project.targetList ?? [];
+  const filledTargetList = targetList.filter((item) => item.address.trim());
+  const targetLocationText = filledTargetList.length
+    ? `${filledTargetList.map((item) => item.address.trim()).join("、")}共${filledTargetList.length}門牌。`
+    : buildTargetLocationText(activeCase);
+  const county = project.countyCity?.trim() || "○○縣市";
+  const processNoteText = project.processNote?.trim() ? `\n\n${project.processNote.trim()}` : "";
+  const targetListCount = targetList.length || targetCount;
 
   return {
     applicant: `　　申請單位：${project.applicantName}\n　　連絡地址：${project.applicantAddress ?? ""}\n　　連絡電話：${project.applicantPhone ?? ""}\n　　連絡人　︰${project.contactPerson ?? ""}`,
     "application-date": `　　${applicationDate}\n　　(社團法人臺中市土木技師公會${receivedDate}收文號：${receivedNo})`,
-    "target-location": buildTargetLocationText(activeCase),
+    "target-location": targetLocationText,
     purpose: `申請單位${project.applicantName}將進行${workName}，為顧及日後施工若引起損鄰事件，可能引起之損鄰糾紛暨有關責任歸屬之釐清，於${applicationDate}，函請本公會辦理鄰房現況鑑定(詳附件一)。`,
+    basis: `（一）鑑定申請書(詳附件一)。\n（二）本公會會勘通知函(詳附件二)。\n（三）${county}建築物施工損壞鄰房事件處理自治條例。\n（四）臺中市土木技師公會鑑定手冊。`,
+    "survey-dates": `${surveyDatesText}\n（會勘通知函詳附件二。）`,
+    "inspection-dates": `${surveyDatesText}\n（會勘通知函詳附件二。）`,
     staff: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${engineerNames}　技師\n所有權人代表：詳附件三。`,
-    process: `申請人於${applicationDate}向本會提出本案施工前之鄰房現況鑑定申請(本會收文號${receivedNo})，本會即指派${engineerNames}技師負責辦理本案建築物現況鑑定工作。本會鑑定技師依照會勘通知函時間前往現場進行會勘作業。\n\n鑑定技師將可見範圍內鑑定標的物之裂縫及瑕疵等現況拍照、繪製圖說並做成紀錄(詳附件七)。本案目前已建立${targetCount}戶鑑定標的物資料，水準測量成果詳附件五，傾斜率測量成果詳附件六。`,
-    "site-status": "本案會勘時，工程尚未施工(詳附件八)。",
+    process: `申請人於${applicationDate}向本會提出本案施工前之鄰房現況鑑定申請(本會收文號${receivedNo})，本會即指派${engineerNames}技師負責辦理本案建築物現況鑑定工作。本會鑑定技師依照會勘通知函時間前往現場進行會勘作業。\n\n鑑定技師將可見範圍內鑑定標的物之裂縫及瑕疵等現況拍照、繪製圖說並做成紀錄(詳附件七)。本案目前已建立${targetCount}戶現況調查，及全${targetListCount}棟建築物之鑑定標的物之水準測量(詳附件五)及傾斜率測量(詳附件六)。${processNoteText}`,
+    "site-status": project.siteStatusNote?.trim() || "本案會勘時，工程尚未施工(詳附件八)。",
     "target-status": buildTargetUsageText(activeCase),
     attachments: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
   };
@@ -1319,7 +1350,49 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
               name: "",
               memberNo: "",
             },
-          ],
+        ],
+    });
+  }
+
+  function addSurveyDate() {
+    updateProject({
+      surveyDates: [
+        ...(project.surveyDates ?? []),
+        { id: crypto.randomUUID(), date: "", timeRange: "" },
+      ],
+    });
+  }
+
+  function removeSurveyDate(id: string) {
+    updateProject({ surveyDates: (project.surveyDates ?? []).filter((surveyDate) => surveyDate.id !== id) });
+  }
+
+  function updateSurveyDate(id: string, patch: Partial<SurveyDate>) {
+    updateProject({
+      surveyDates: (project.surveyDates ?? []).map((surveyDate) =>
+        surveyDate.id === id ? { ...surveyDate, ...patch } : surveyDate,
+      ),
+    });
+  }
+
+  function addTargetListItem() {
+    updateProject({
+      targetList: [
+        ...(project.targetList ?? []),
+        { id: crypto.randomUUID(), address: "", usage: "住宅" },
+      ],
+    });
+  }
+
+  function removeTargetListItem(id: string) {
+    updateProject({ targetList: (project.targetList ?? []).filter((item) => item.id !== id) });
+  }
+
+  function updateTargetListItem(id: string, patch: Partial<TargetListItem>) {
+    updateProject({
+      targetList: (project.targetList ?? []).map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
     });
   }
 
@@ -1346,6 +1419,12 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
           <TextField label="收文號" value={project.receivedNo ?? ""} onChange={(receivedNo) => updateProject({ receivedNo })} />
           <TextField label="鑑定類型" value={project.inspectionType} onChange={(inspectionType) => updateProject({ inspectionType })} />
           <TextField label="完稿日期" type="date" value={project.finalDate ?? ""} onChange={(finalDate) => updateProject({ finalDate })} />
+          <TextField
+            label="縣市別"
+            value={project.countyCity ?? ""}
+            onChange={(countyCity) => updateProject({ countyCity })}
+            placeholder="如：彰化縣、臺中市"
+          />
           <label className="block md:col-span-2">
             <span className="mb-1 block text-sm font-semibold text-muted">標的物之坐落摘要</span>
             <textarea
@@ -1393,6 +1472,48 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
         </section>
       </Panel>
 
+      <Panel title="會勘日期" icon={<CalendarDays size={18} />}>
+        <div className="grid gap-3">
+          {(project.surveyDates ?? []).map((surveyDate, index) => (
+            <div
+              key={surveyDate.id}
+              className="grid gap-3 rounded-md border border-line bg-white p-3 md:grid-cols-[auto_1fr_2fr_auto]"
+            >
+              <span className="flex min-w-[3rem] items-center text-sm font-semibold text-muted">
+                第{toChineseNumber(index + 1)}次
+              </span>
+              <TextField
+                label="日期"
+                type="date"
+                value={surveyDate.date}
+                onChange={(date) => updateSurveyDate(surveyDate.id, { date })}
+                icon={<CalendarDays size={16} />}
+              />
+              <TextField
+                label="時間範圍"
+                value={surveyDate.timeRange}
+                onChange={(timeRange) => updateSurveyDate(surveyDate.id, { timeRange })}
+                placeholder="如：上午9至12時、下午1時30分至4時"
+              />
+              <button
+                type="button"
+                onClick={() => removeSurveyDate(surveyDate.id)}
+                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
+              >
+                <Trash2 size={16} /> 刪除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addSurveyDate}
+            className="inline-flex min-h-10 w-fit items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+          >
+            <Plus size={16} /> 新增會勘日期
+          </button>
+        </div>
+      </Panel>
+
       <Panel title="主要標的物預設資料" icon={<Home size={18} />}>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="md:col-span-2">
@@ -1401,6 +1522,73 @@ function BasicDataEditor({ activeCase, onChange }: { activeCase: InspectionCase;
           <TextField label="標的物地址" value={target.address} onChange={(address) => updateTarget({ address })} className="md:col-span-2" />
           <SelectField label="用途" value={target.usageType} options={usageOptions} onChange={(usageType) => updateTarget({ usageType })} />
           <TextField label="備註" value={target.note} onChange={(note) => updateTarget({ note })} />
+        </div>
+        <label className="mt-3 block">
+          <span className="mb-1 block text-sm font-semibold text-muted">工地現況說明</span>
+          <textarea
+            value={project.siteStatusNote ?? ""}
+            placeholder="預設：本案會勘時，工程尚未施工(詳附件八)。"
+            onChange={(event) => updateProject({ siteStatusNote: event.target.value })}
+            rows={2}
+            className="w-full rounded-md border border-line bg-white p-3 text-sm"
+          />
+        </label>
+        <label className="mt-3 block">
+          <span className="mb-1 block text-sm font-semibold text-muted">鑑定過程補充說明</span>
+          <textarea
+            value={project.processNote ?? ""}
+            placeholder="如：其中，○○號經鑑定技師三次造訪現場會勘皆無人在場，..."
+            onChange={(event) => updateProject({ processNote: event.target.value })}
+            rows={3}
+            className="w-full rounded-md border border-line bg-white p-3 text-sm"
+          />
+        </label>
+      </Panel>
+
+      <Panel title="標的物清單（用於主文第十節）" icon={<Home size={18} />}>
+        <p className="mb-3 text-xs text-muted">
+          逐筆輸入門牌地址與用途，系統將自動生成第三節標的物坐落文字與第十節用途及現況。
+        </p>
+        <div className="grid gap-3">
+          {(project.targetList ?? []).map((item, index) => (
+            <div key={item.id} className="grid gap-3 rounded-md border border-line bg-white p-3 md:grid-cols-[auto_2fr_1fr_auto]">
+              <span className="flex min-w-[2rem] items-center text-sm font-semibold text-muted">{index + 1}</span>
+              <TextField
+                label="門牌地址"
+                value={item.address}
+                onChange={(address) => updateTargetListItem(item.id, { address })}
+                placeholder="如：彰化縣永靖鄉獨鰲路一段18號"
+              />
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-muted">用途</span>
+                <select
+                  value={item.usage}
+                  onChange={(event) => updateTargetListItem(item.id, { usage: event.target.value })}
+                  className="min-h-11 w-full rounded-md border border-line bg-white px-3 text-sm"
+                >
+                  <option value="住宅">住宅</option>
+                  <option value="商業">商業</option>
+                  <option value="工業">工業</option>
+                  <option value="未能進入室內，故無法判斷">未能進入（無法判斷）</option>
+                  <option value="其他">其他</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => removeTargetListItem(item.id)}
+                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
+              >
+                <Trash2 size={16} /> 刪除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addTargetListItem}
+            className="inline-flex min-h-10 w-fit items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+          >
+            <Plus size={16} /> 新增標的物
+          </button>
         </div>
       </Panel>
     </div>
@@ -2302,6 +2490,7 @@ function TextField({
   type = "text",
   icon,
   className = "",
+  placeholder,
 }: {
   label: string;
   value: string;
@@ -2309,6 +2498,7 @@ function TextField({
   type?: string;
   icon?: ReactNode;
   className?: string;
+  placeholder?: string;
 }) {
   const hint = fieldHint(label);
   const useMono = shouldUseMonoField(label, type);
@@ -2324,6 +2514,7 @@ function TextField({
         <input
           type={type}
           value={value}
+          placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           className={`w-full bg-transparent outline-none ${useMono ? "mono-data" : ""}`}
         />

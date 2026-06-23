@@ -19,12 +19,29 @@ export interface Project {
   receivedDate?: string;
   receivedNo?: string;
   targetSummary?: string;
+  surveyDates?: SurveyDate[];
+  countyCity?: string;
+  siteStatusNote?: string;
+  processNote?: string;
+  targetList?: TargetListItem[];
   engineers?: ProjectEngineer[];
   engineerNames?: string;
   associationEngineers?: string;
   finalDate?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface SurveyDate {
+  id: string;
+  date: string;
+  timeRange: string;
+}
+
+export interface TargetListItem {
+  id: string;
+  address: string;
+  usage: string;
 }
 
 export interface ProjectEngineer {
