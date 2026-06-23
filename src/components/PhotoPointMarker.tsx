@@ -28,6 +28,8 @@ export function PhotoPointMarker({
   const angle = (point.directionAngle * Math.PI) / 180;
   const endX = point.x + Math.cos(angle) * arrowLength;
   const endY = point.y + Math.sin(angle) * arrowLength;
+  const markerColor = point.inaccessible ? "#f97316" : "#c5161d";
+  const markerLabel = point.inaccessible ? "×" : point.photoNo;
 
   return (
     <g
@@ -58,20 +60,20 @@ export function PhotoPointMarker({
         y1={point.y}
         x2={endX}
         y2={endY}
-        stroke="#c5161d"
+        stroke={markerColor}
         strokeWidth="4"
         strokeLinecap="round"
       />
       <polygon
         points={`${endX},${endY} ${endX - Math.cos(angle - 0.5) * 12},${endY - Math.sin(angle - 0.5) * 12} ${endX - Math.cos(angle + 0.5) * 12},${endY - Math.sin(angle + 0.5) * 12}`}
-        fill="#c5161d"
+        fill={markerColor}
       />
       <circle
         cx={endX}
         cy={endY}
         r="13"
-        fill={active ? "rgba(197,22,29,0.18)" : "transparent"}
-        stroke={active ? "#c5161d" : "transparent"}
+        fill={active ? (point.inaccessible ? "rgba(249,115,22,0.18)" : "rgba(197,22,29,0.18)") : "transparent"}
+        stroke={active ? markerColor : "transparent"}
         strokeWidth="2"
         className="cursor-grab"
         onPointerDown={(event) => {
@@ -89,16 +91,16 @@ export function PhotoPointMarker({
           onRotateEnd?.();
         }}
       />
-      <circle cx={point.x} cy={point.y} r={active ? 18 : 15} fill="#fff" stroke="#c5161d" strokeWidth="4" />
+      <circle cx={point.x} cy={point.y} r={active ? 18 : 15} fill={point.inaccessible ? "#f97316" : "#fff"} stroke={markerColor} strokeWidth="4" />
       <text
         x={point.x}
         y={point.y + 5}
         textAnchor="middle"
         fontSize="15"
         fontWeight="700"
-        fill="#c5161d"
+        fill={point.inaccessible ? "#fff" : markerColor}
       >
-        {point.photoNo}
+        {markerLabel}
       </text>
     </g>
   );

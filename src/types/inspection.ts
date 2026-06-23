@@ -126,6 +126,7 @@ export interface InspectionPoint {
   componentType: ComponentType[];
   conditionType: ConditionType[];
   crackWidthMm?: number;
+  inaccessible?: boolean;
   note: string;
   photo?: PhotoRecord;
   createdAt: string;

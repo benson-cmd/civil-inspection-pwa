@@ -4,8 +4,14 @@ export function buildPhotoCaption(input: {
   componentType: ComponentType[];
   conditionType: ConditionType[];
   crackWidthMm?: number;
+  inaccessible?: boolean;
   note?: string;
 }) {
+  if (input.inaccessible) {
+    const note = input.note?.trim() ? `；${input.note.trim()}` : "";
+    return `不便進入／拍照${note}`;
+  }
+
   const component = input.componentType.join("、") || "未註明構件";
   const condition = input.conditionType.join("、") || "未註明現況";
   const crack = input.conditionType.includes("裂縫") && input.crackWidthMm

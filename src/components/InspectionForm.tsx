@@ -143,6 +143,21 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
         </div>
       </div>
 
+      <div className="mb-3 rounded-md border border-orange-200 bg-orange-50/60 p-3">
+        <label className="flex cursor-pointer select-none items-center gap-2">
+          <input
+            type="checkbox"
+            checked={point.inaccessible ?? false}
+            onChange={(event) => onChange({ ...point, inaccessible: event.target.checked })}
+            className="rounded border-line"
+          />
+          <span className="text-sm font-medium text-orange-700">此點位不便進入／拍照</span>
+        </label>
+        {point.inaccessible ? (
+          <p className="mt-1 text-xs text-muted">標記後該點位在 PDF 報告中會顯示「不便進入」說明。</p>
+        ) : null}
+      </div>
+
       <fieldset className="mb-4">
         <legend className="mb-2 text-sm font-semibold">構件位置</legend>
         <div className="grid grid-cols-2 gap-2">

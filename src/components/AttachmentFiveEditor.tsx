@@ -92,85 +92,115 @@ export function AttachmentFiveEditor({
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-collapse text-sm">
+          <table className="w-full min-w-[1180px] border-collapse text-sm">
             <thead>
               <tr className="bg-[#e7e5e4] text-left">
                 <th className="border border-line p-2">測點編號</th>
                 <th className="border border-line p-2">位置</th>
                 <th className="border border-line p-2">日期</th>
-                <th className="border border-line p-2">相對高程 m</th>
+                <th className="border border-line p-2 whitespace-nowrap">初測高程 m</th>
+                <th className="border border-line p-2 whitespace-nowrap">複測高程 m</th>
+                <th className="border border-line p-2 whitespace-nowrap">高程差(m)</th>
                 <th className="border border-line p-2">備註</th>
                 <th className="border border-line p-2">測點照片</th>
                 <th className="border border-line p-2">操作</th>
               </tr>
             </thead>
             <tbody>
-              {displayRows.map((row) => (
-                <tr
-                  key={row.id}
-                  className={row.id === activeRow?.id ? "bg-green-50" : "bg-white"}
-                  onClick={() => setActiveRowId(row.id)}
-                >
-                  <td className="border border-line p-2">
-                    <TableInput value={row.pointNo} placeholder="BM1 / H1" onChange={(pointNo) => updateRow(row.id, { pointNo })} />
-                  </td>
-                  <td className="border border-line p-2">
-                    <TableInput
-                      value={row.location}
-                      placeholder={`詳水準測量位置示意圖及${row.pointNo || "測點"}現況照片`}
-                      onChange={(location) => updateRow(row.id, { location })}
-                    />
-                  </td>
-                  <td className="border border-line p-2">
-                    <TableInput type="date" value={row.measurementDate ?? ""} onChange={(measurementDate) => updateRow(row.id, { measurementDate })} />
-                  </td>
-                  <td className="border border-line p-2">
-                    <TableInput
-                      type="number"
-                      inputMode="decimal"
-                      value={row.relativeElevation ?? row.initialElevation}
-                      onChange={(relativeElevation) => updateRow(row.id, { relativeElevation, initialElevation: relativeElevation })}
-                    />
-                  </td>
-                  <td className="border border-line p-2">
-                    <TableInput value={row.note} onChange={(note) => updateRow(row.id, { note })} />
-                  </td>
-                  <td className="border border-line p-2">
-                    <PhotoUploader
-                      row={row}
-                      onUpload={(file) => {
-                        void onPhotoUpload(row, file).then((uploaded) =>
-                          updateRow(row.id, {
-                            photo: {
-                              id: row.photo?.id ?? crypto.randomUUID(),
-                              imageUrl: uploaded.imageUrl,
-                              storagePath: uploaded.storagePath,
-                              caption: `${row.pointNo || "測點"} 水準點現況`,
-                              takenAt: new Date().toISOString(),
-                            },
-                          }),
-                        );
-                      }}
-                    />
-                  </td>
-                  <td className="border border-line p-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeRow(row.id);
-                      }}
-                      className="inline-flex min-h-10 items-center justify-center rounded-md border border-line bg-white px-3 text-muted"
-                      aria-label="刪除測點"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {displayRows.map((row) => {
+                const initial = parseFloat(row.initialElevation) || 0;
+                const repeat = parseFloat(row.repeatElevation) || 0;
+                const diff = repeat - initial;
+                const hasElevation = initial !== 0 || repeat !== 0;
+                const isWarning = Math.abs(diff) > 0.01;
+
+                return (
+                  <tr
+                    key={row.id}
+                    className={row.id === activeRow?.id ? "bg-green-50" : "bg-white"}
+                    onClick={() => setActiveRowId(row.id)}
+                  >
+                    <td className="border border-line p-2">
+                      <TableInput value={row.pointNo} placeholder="BM1 / H1" onChange={(pointNo) => updateRow(row.id, { pointNo })} />
+                    </td>
+                    <td className="border border-line p-2">
+                      <TableInput
+                        value={row.location}
+                        placeholder={`詳水準測量位置示意圖及${row.pointNo || "測點"}現況照片`}
+                        onChange={(location) => updateRow(row.id, { location })}
+                      />
+                    </td>
+                    <td className="border border-line p-2">
+                      <TableInput type="date" value={row.measurementDate ?? ""} onChange={(measurementDate) => updateRow(row.id, { measurementDate })} />
+                    </td>
+                    <td className="border border-line p-2">
+                      <TableInput
+                        type="number"
+                        inputMode="decimal"
+                        value={row.initialElevation}
+                        onChange={(initialElevation) => updateRow(row.id, { initialElevation, relativeElevation: initialElevation })}
+                      />
+                    </td>
+                    <td className="border border-line p-2">
+                      <TableInput
+                        type="number"
+                        inputMode="decimal"
+                        value={row.repeatElevation}
+                        onChange={(repeatElevation) => updateRow(row.id, { repeatElevation })}
+                      />
+                    </td>
+                    <td className={`mono-data border border-line p-2 text-center ${isWarning ? "bg-orange-50 font-bold text-orange-700" : ""}`}>
+                      {hasElevation ? `${diff >= 0 ? "+" : ""}${diff.toFixed(3)}` : "—"}
+                      {isWarning ? " ⚠️" : ""}
+                    </td>
+                    <td className="border border-line p-2">
+                      <TableInput value={row.note} onChange={(note) => updateRow(row.id, { note })} />
+                    </td>
+                    <td className="border border-line p-2">
+                      <PhotoUploader
+                        row={row}
+                        onUpload={(file) => {
+                          void onPhotoUpload(row, file).then((uploaded) =>
+                            updateRow(row.id, {
+                              photo: {
+                                id: row.photo?.id ?? crypto.randomUUID(),
+                                imageUrl: uploaded.imageUrl,
+                                storagePath: uploaded.storagePath,
+                                caption: `${row.pointNo || "測點"} 水準點現況`,
+                                takenAt: new Date().toISOString(),
+                              },
+                            }),
+                          );
+                        }}
+                      />
+                    </td>
+                    <td className="border border-line p-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeRow(row.id);
+                        }}
+                        className="inline-flex min-h-10 items-center justify-center rounded-md border border-line bg-white px-3 text-muted"
+                        aria-label="刪除測點"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+        {displayRows.some((row) => {
+          const diff = (parseFloat(row.repeatElevation) || 0) - (parseFloat(row.initialElevation) || 0);
+          return Math.abs(diff) > 0.01;
+        }) ? (
+          <p className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700">
+            ⚠️ 高程差超過 10mm 的測點請確認是否需要說明。
+          </p>
+        ) : null}
       </div>
     </section>
   );

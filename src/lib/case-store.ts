@@ -96,6 +96,7 @@ type InspectionPointRow = {
   component_type: InspectionPoint["componentType"] | null;
   condition_type: InspectionPoint["conditionType"] | null;
   crack_width_mm: number | string | null;
+  inaccessible: boolean | null;
   note: string | null;
   created_at: string;
   ci_photos?: PhotoRow[];
@@ -565,6 +566,7 @@ async function saveAttachmentSevenData(supabase: SupabaseClient, inspectionCase:
     component_type: point.componentType,
     condition_type: point.conditionType,
     crack_width_mm: point.crackWidthMm ?? null,
+    inaccessible: point.inaccessible ?? false,
     note: point.note,
     created_at: point.createdAt,
   }));
@@ -872,6 +874,7 @@ async function inspectionPointRowToPoint(supabase: SupabaseClient, row: Inspecti
     componentType: row.component_type ?? [],
     conditionType: row.condition_type ?? [],
     crackWidthMm: row.crack_width_mm == null ? undefined : Number(row.crack_width_mm),
+    inaccessible: row.inaccessible ?? false,
     note: row.note ?? "",
     photo: photoRow ? await photoRowToRecord(supabase, photoRow) : undefined,
     createdAt: row.created_at,

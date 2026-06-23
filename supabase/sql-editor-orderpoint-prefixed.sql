@@ -115,6 +115,7 @@ create table if not exists public.ci_inspection_points (
   component_type text[] not null default '{}',
   condition_type text[] not null default '{}',
   crack_width_mm numeric(6, 2),
+  inaccessible boolean not null default false,
   note text,
   created_at timestamptz not null default now(),
   constraint ci_inspection_points_direction_check check (direction_angle >= 0 and direction_angle < 360),

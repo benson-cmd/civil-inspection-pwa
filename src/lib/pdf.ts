@@ -221,6 +221,7 @@ function buildInspectionTablePage(
       }
 
       const has = (label: string, values: string[]) => (values.includes(label) ? "✔" : "");
+      const note = point.inaccessible ? `不便進入／拍照${point.note ? `；${point.note}` : ""}` : point.note;
       return `
         <tr>
           <td>${escapeHtml(point.photoNo)}</td>
@@ -236,7 +237,7 @@ function buildInspectionTablePage(
           <td>${point.crackWidthMm ?? ""}</td>
           <td>${has("滲水", point.conditionType)}</td>
           <td>${has("剝落", point.conditionType)}</td>
-          <td>${escapeHtml(point.note)}</td>
+          <td>${escapeHtml(note)}</td>
           <td>${escapeHtml(findFloorName(floors, point.floorId))}</td>
         </tr>`;
     })
