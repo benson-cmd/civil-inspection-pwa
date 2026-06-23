@@ -43,6 +43,8 @@ import type {
   AppUser,
   AttachmentSlot,
   Floor,
+  FloorPlan,
+  FloorPlanData,
   FloorName,
   InspectionCase,
   InspectionPoint,
@@ -707,13 +709,25 @@ function buildAttachmentSevenFloors(activeCase: InspectionCase): Floor[] {
         targetId: target.id,
         floorName,
         planSvgOrJson: serializePlanToSvg(
-          data.plansByTargetFloor[target.id]?.[floorName] ?? [],
+          normalizeFloorPlan(data.plansByTargetFloor[target.id]?.[floorName]).paths,
           floorPoints,
           data.noEntryZonesByTargetFloor[target.id]?.[floorName] ?? [],
         ),
       };
     }),
   );
+}
+
+function normalizeFloorPlan(plan?: FloorPlanData): FloorPlan {
+  if (Array.isArray(plan)) return { paths: plan };
+  return {
+    paths: plan?.paths ?? [],
+    backgroundImage: plan?.backgroundImage,
+  };
+}
+
+function emptyFloorPlanRecord(): Record<FloorName, FloorPlanData> {
+  return Object.fromEntries(defaultFloorNames.map((floorName) => [floorName, { paths: [] }])) as Record<FloorName, FloorPlanData>;
 }
 
 function formatEngineerNames(project: Project) {
@@ -1327,7 +1341,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   const [floorNamesByTarget, setFloorNamesByTarget] = useState<Record<string, FloorName[]>>(
     () => activeCase.attachmentSeven?.floorNamesByTarget ?? { [activeCase.target.id]: defaultFloorNames },
   );
-  const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, string[]>>>(
+  const [plansByTargetFloor, setPlansByTargetFloor] = useState<Record<string, Record<FloorName, FloorPlanData>>>(
     () => activeCase.attachmentSeven?.plansByTargetFloor ?? {},
   );
   const [noEntryZonesByTargetFloor, setNoEntryZonesByTargetFloor] = useState<Record<string, Record<FloorName, NoEntryZone[]>>>(
@@ -1341,7 +1355,8 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
   const target = targets.find((item) => item.id === activeTargetId) ?? targets[0] ?? activeCase.target;
   const targetFloorNames = floorNamesByTarget[target.id] ?? defaultFloorNames;
   const activeFloorId = floorIdForTarget(target.id, activeFloorName);
-  const activePlanPaths = plansByTargetFloor[target.id]?.[activeFloorName] ?? [];
+  const activePlan = normalizeFloorPlan(plansByTargetFloor[target.id]?.[activeFloorName]);
+  const activePlanPaths = activePlan.paths;
   const activeNoEntryZones = noEntryZonesByTargetFloor[target.id]?.[activeFloorName] ?? [];
   const floorPoints = points.filter((point) => point.floorId === activeFloorId);
   const activePoint = points.find((point) => point.id === activePointId);
@@ -1370,7 +1385,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
           targetId: target.id,
           floorName,
           planSvgOrJson: serializePlanToSvg(
-            plansByTargetFloor[target.id]?.[floorName] ?? [],
+            normalizeFloorPlan(plansByTargetFloor[target.id]?.[floorName]).paths,
             floorSpecificPoints,
             noEntryZonesByTargetFloor[target.id]?.[floorName] ?? [],
           ),
@@ -1436,13 +1451,13 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
     });
   }
 
-  function updateActivePlan(paths: string[]) {
+  function updateActivePlan(plan: FloorPlan) {
     const nextPlans = {
       ...plansByTargetFloor,
       [target.id]: {
-        ...emptyFloorRecord<string[]>(),
+        ...emptyFloorPlanRecord(),
         ...plansByTargetFloor[target.id],
-        [activeFloorName]: paths,
+        [activeFloorName]: plan,
       },
     };
     setPlansByTargetFloor(nextPlans);
@@ -1723,7 +1738,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             activeMode={floorPlanMode}
             points={floorPoints}
             activePointId={activePointId}
-            planPaths={activePlanPaths}
+            plan={activePlan}
             noEntryZones={activeNoEntryZones}
             onPlanChange={updateActivePlan}
             onNoEntryZonesChange={updateActiveNoEntryZones}
@@ -1740,14 +1755,14 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
             }}
             onSelectPoint={setActivePointId}
             onModeChange={setFloorPlanMode}
-            onClearPlan={() => updateActivePlan([])}
+            onClearPlan={() => updateActivePlan({ ...activePlan, paths: [] })}
             onUndoPlan={() => {
               const zones = activeNoEntryZones;
               if (zones.length > 0) {
                 updateActiveNoEntryZones(zones.slice(0, -1));
                 return;
               }
-              updateActivePlan(activePlanPaths.slice(0, -1));
+              updateActivePlan({ ...activePlan, paths: activePlanPaths.slice(0, -1) });
             }}
           />
 

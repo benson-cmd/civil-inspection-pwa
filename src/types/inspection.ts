@@ -99,6 +99,13 @@ export interface Floor {
   planSvgOrJson: string;
 }
 
+export interface FloorPlan {
+  paths: string[];
+  backgroundImage?: string;
+}
+
+export type FloorPlanData = string[] | FloorPlan;
+
 export interface NoEntryZone {
   id: string;
   x: number;
@@ -181,7 +188,7 @@ export interface InspectionCase {
 export interface AttachmentSevenData {
   targets: Target[];
   floorNamesByTarget: Record<string, FloorName[]>;
-  plansByTargetFloor: Record<string, Record<FloorName, string[]>>;
+  plansByTargetFloor: Record<string, Record<FloorName, FloorPlanData>>;
   noEntryZonesByTargetFloor: Record<string, Record<FloorName, NoEntryZone[]>>;
   points: InspectionPoint[];
 }

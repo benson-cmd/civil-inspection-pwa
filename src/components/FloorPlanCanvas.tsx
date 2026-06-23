@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent } from "react";
-import { Eraser, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
-import type { InspectionPoint, NoEntryZone } from "@/types/inspection";
+import type { ChangeEvent, PointerEvent } from "react";
+import { Eraser, ImageOff, ImagePlus, LocateFixed, Magnet, Move, Pencil, RotateCcw, RotateCw, Slash, X } from "lucide-react";
+import type { FloorPlan, InspectionPoint, NoEntryZone } from "@/types/inspection";
 import { PhotoPointMarker } from "./PhotoPointMarker";
 
 interface FloorPlanCanvasProps {
   activeMode?: Mode;
   points: InspectionPoint[];
   activePointId?: string;
-  planPaths: string[];
+  plan: FloorPlan;
   noEntryZones: NoEntryZone[];
-  onPlanChange: (paths: string[]) => void;
+  onPlanChange: (plan: FloorPlan) => void;
   onNoEntryZonesChange: (zones: NoEntryZone[]) => void;
   onAddPoint: (position: { x: number; y: number }) => void;
   onMovePoint: (pointId: string, position: { x: number; y: number }) => void;
@@ -34,7 +34,7 @@ export function FloorPlanCanvas({
   activeMode,
   points,
   activePointId,
-  planPaths,
+  plan,
   noEntryZones = [],
   onPlanChange,
   onNoEntryZonesChange,
@@ -62,6 +62,7 @@ export function FloorPlanCanvas({
     startedAt: number;
   } | null>(null);
 
+  const planPaths = plan.paths;
   const allPaths = useMemo(() => (draftPath ? [...planPaths, draftPath] : planPaths), [draftPath, planPaths]);
 
   useEffect(() => {
@@ -204,9 +205,21 @@ export function FloorPlanCanvas({
     }
 
     if (!draftPath) return;
-    onPlanChange([...planPaths, draftPath]);
+    onPlanChange({ ...plan, paths: [...planPaths, draftPath] });
     setDraftPath("");
     setLineStart(null);
+  }
+
+  function handleBgUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      onPlanChange({ ...plan, backgroundImage: String(reader.result) });
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
   }
 
   return (
@@ -259,6 +272,30 @@ export function FloorPlanCanvas({
             >
               <Magnet size={18} /> {snapLine ? "吸附開" : "吸附關"}
             </button>
+            <label
+              htmlFor="floor-plan-bg-upload"
+              className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+              title="匯入平面圖底圖（JPG/PNG/WebP）"
+            >
+              <ImagePlus size={18} /> 底圖
+            </label>
+            <input
+              type="file"
+              id="floor-plan-bg-upload"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleBgUpload}
+            />
+            {plan.backgroundImage ? (
+              <button
+                type="button"
+                onClick={() => onPlanChange({ ...plan, backgroundImage: undefined })}
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700"
+                title="移除底圖"
+              >
+                <ImageOff size={18} /> 移除
+              </button>
+            ) : null}
           </div>
           <div className="h-8 w-px self-center bg-line mx-1" />
           <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
@@ -328,6 +365,18 @@ export function FloorPlanCanvas({
           </pattern>
         </defs>
         <rect width={viewBox.width} height={viewBox.height} fill="url(#grid)" />
+        {plan.backgroundImage ? (
+          <image
+            href={plan.backgroundImage}
+            x={0}
+            y={0}
+            width={viewBox.width}
+            height={viewBox.height}
+            opacity={0.35}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ pointerEvents: "none" }}
+          />
+        ) : null}
         {allPaths.map((path, index) => (
           <path
             key={`${path}-${index}`}
@@ -341,7 +390,7 @@ export function FloorPlanCanvas({
             onPointerDown={(event) => {
               if (mode !== "erase" || index >= planPaths.length) return;
               event.stopPropagation();
-              onPlanChange(planPaths.filter((_, pathIndex) => pathIndex !== index));
+              onPlanChange({ ...plan, paths: planPaths.filter((_, pathIndex) => pathIndex !== index) });
             }}
           />
         ))}

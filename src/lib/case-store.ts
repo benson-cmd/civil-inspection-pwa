@@ -5,6 +5,8 @@ import type {
   AppUser,
   AttachmentSlot,
   AttachmentSevenData,
+  FloorPlan,
+  FloorPlanData,
   FloorName,
   InspectionCase,
   InspectionPoint,
@@ -79,7 +81,7 @@ type FloorRow = {
   id: string;
   target_id: string;
   floor_name: FloorName;
-  plan_svg_or_json: string[] | null;
+  plan_svg_or_json: FloorPlanData | null;
   no_entry_zones: NoEntryZone[] | null;
   ci_inspection_points?: InspectionPointRow[];
 };
@@ -806,10 +808,10 @@ async function buildAttachmentSevenData(supabase: SupabaseClient, row: ProjectRo
   for (const floor of floors) {
     if (!floorNamesByTarget[floor.target_id]) floorNamesByTarget[floor.target_id] = [];
     if (!floorNamesByTarget[floor.target_id].includes(floor.floor_name)) floorNamesByTarget[floor.target_id].push(floor.floor_name);
-    if (!plansByTargetFloor[floor.target_id]) plansByTargetFloor[floor.target_id] = emptyFloorRecord<string[]>();
+    if (!plansByTargetFloor[floor.target_id]) plansByTargetFloor[floor.target_id] = emptyFloorRecord<FloorPlanData>();
     if (!noEntryZonesByTargetFloor[floor.target_id]) noEntryZonesByTargetFloor[floor.target_id] = emptyFloorRecord<NoEntryZone[]>();
 
-    plansByTargetFloor[floor.target_id][floor.floor_name] = Array.isArray(floor.plan_svg_or_json) ? floor.plan_svg_or_json : [];
+    plansByTargetFloor[floor.target_id][floor.floor_name] = normalizeStoredFloorPlan(floor.plan_svg_or_json);
     noEntryZonesByTargetFloor[floor.target_id][floor.floor_name] = Array.isArray(floor.no_entry_zones) ? floor.no_entry_zones : [];
 
     for (const point of floor.ci_inspection_points ?? []) {
@@ -826,6 +828,22 @@ async function buildAttachmentSevenData(supabase: SupabaseClient, row: ProjectRo
     noEntryZonesByTargetFloor,
     points,
   };
+}
+
+function normalizeStoredFloorPlan(plan: FloorPlanData | null): FloorPlanData {
+  if (Array.isArray(plan)) return plan.filter((path): path is string => typeof path === "string");
+  if (isFloorPlan(plan)) return plan;
+  return [];
+}
+
+function isFloorPlan(value: unknown): value is FloorPlan {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as { paths?: unknown; backgroundImage?: unknown };
+  return (
+    Array.isArray(candidate.paths) &&
+    candidate.paths.every((path) => typeof path === "string") &&
+    (candidate.backgroundImage === undefined || typeof candidate.backgroundImage === "string")
+  );
 }
 
 function targetRowToTarget(row: TargetRow): Target {
