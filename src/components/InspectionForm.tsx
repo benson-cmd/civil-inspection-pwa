@@ -63,12 +63,12 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
 
   return (
     <aside className="workspace-panel rounded-lg border border-line bg-paper p-4 shadow-[0_1px_2px_rgba(28,25,23,0.05)]">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm text-muted">目前照片</div>
           <h2 className="mono-data text-2xl font-black text-accent">#{point.photoNo}</h2>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-2">
           <label className="relative inline-flex min-h-11 cursor-pointer items-center gap-2 overflow-hidden rounded-md bg-ink px-3 text-sm font-semibold text-white">
             <Upload size={18} /> 拍照/上傳
             <input
@@ -87,21 +87,21 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
           <button
             type="button"
             onClick={() => onDelete(point.id)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent px-3 text-sm font-semibold text-accent"
           >
             <Trash2 size={18} /> 刪除
           </button>
           <button
             type="button"
             onClick={onComplete}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white"
           >
             完成本點
           </button>
           <button
             type="button"
             onClick={onContinue}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
           >
             <Plus size={18} /> 下一個點
           </button>
@@ -113,7 +113,7 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
 
       <div className="mb-4">
         <span className="mb-1 block text-sm font-semibold">拍攝方向角度</span>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 xl:grid-cols-4 2xl:grid-cols-4">
           {directionOptions.map((option) => (
             <button
               key={option.label}
@@ -160,7 +160,7 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
 
       <fieldset className="mb-4">
         <legend className="mb-2 text-sm font-semibold">構件位置</legend>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-2">
           {componentOptions.map((option) => (
             <CheckPill
               key={option}
@@ -174,7 +174,7 @@ export function InspectionForm({ point, onChange, onDelete, onComplete, onContin
 
       <fieldset className="mb-4">
         <legend className="mb-2 text-sm font-semibold">現況/缺失</legend>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-2">
           {conditionOptions.map((option) => (
             <CheckPill
               key={option}

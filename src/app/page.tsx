@@ -632,17 +632,17 @@ export default function HomePage() {
               errorMessage={saveError}
               onManualSave={manualSaveCase}
             />
-            <nav className="workspace-panel mb-4 overflow-x-auto rounded-lg border border-[#1a3d2b] bg-[#0f3322] shadow-sm">
-              <div className="flex min-w-max">
+            <nav className="workspace-panel mb-4 rounded-lg border border-[#1a3d2b] bg-[#0f3322] p-1 shadow-sm">
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:flex xl:flex-wrap">
                 {workspaceTabs.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex min-h-[44px] flex-shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-4 text-[13px] font-medium transition-colors ${
+                    className={`flex min-h-[44px] items-center justify-center gap-1.5 rounded-md border-b-2 px-2 text-center text-[13px] font-medium transition-colors xl:flex-shrink-0 xl:px-4 ${
                       activeTab === tab.id
-                        ? "border-[#52b788] text-[#52b788]"
-                        : "border-transparent text-[rgba(240,250,244,0.45)] hover:text-[rgba(240,250,244,0.7)]"
+                        ? "border-[#52b788] bg-[rgba(82,183,136,0.12)] text-[#52b788]"
+                        : "border-transparent text-[rgba(240,250,244,0.52)] hover:bg-[rgba(255,255,255,0.05)] hover:text-[rgba(240,250,244,0.82)]"
                     }`}
                   >
                     {tab.label}
@@ -2141,7 +2141,7 @@ function AttachmentSevenEditor({ activeCase, onChange }: { activeCase: Inspectio
         </section>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-paper p-3">
             <div className="flex items-center gap-2 font-bold">
