@@ -45,6 +45,8 @@ type ProjectRow = {
   site_status_note: string | null;
   process_note: string | null;
   target_list: TargetListItem[] | null;
+  attachment_four_plan_paths: string[] | null;
+  attachment_four_note: string | null;
   engineer_names: string | null;
   association_engineers: string | null;
   level_plan_paths?: string[] | null;
@@ -428,6 +430,8 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     site_status_note: project.siteStatusNote ?? "",
     process_note: project.processNote ?? "",
     target_list: project.targetList ?? [],
+    attachment_four_plan_paths: project.attachmentFourPlanPaths ?? [],
+    attachment_four_note: project.attachmentFourNote ?? "",
     engineer_names: JSON.stringify(project.engineers ?? []),
     association_engineers: project.associationEngineers ?? "",
     level_plan_paths: inspectionCase.levelPlanPaths ?? [],
@@ -531,6 +535,8 @@ async function upsertProjectWithColumnFallback(supabase: SupabaseClient, project
     "site_status_note",
     "process_note",
     "target_list",
+    "attachment_four_plan_paths",
+    "attachment_four_note",
   ];
 
   for (let attempt = 0; attempt <= optionalColumns.length; attempt += 1) {
@@ -795,6 +801,8 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
     siteStatusNote: row.site_status_note ?? "",
     processNote: row.process_note ?? "",
     targetList: normalizeTargetList(row.target_list),
+    attachmentFourPlanPaths: Array.isArray(row.attachment_four_plan_paths) ? row.attachment_four_plan_paths : [],
+    attachmentFourNote: row.attachment_four_note ?? "",
     engineers: parseEngineers(row.engineer_names),
     engineerNames: "",
     associationEngineers: row.association_engineers ?? "",

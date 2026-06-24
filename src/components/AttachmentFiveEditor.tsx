@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import type { LevelMeasurement } from "@/types/inspection";
+import type { LevelMeasurement, Project, Target } from "@/types/inspection";
 import { MeasurementPlanEditor } from "@/components/MeasurementPlanEditor";
+import { PdfExportButton } from "@/components/PdfExportButton";
 
 function createRow(): LevelMeasurement {
   return {
@@ -19,12 +20,16 @@ function createRow(): LevelMeasurement {
 }
 
 export function AttachmentFiveEditor({
+  project,
+  target,
   rows,
   planPaths,
   onRowsChange,
   onPlanPathsChange,
   onPhotoUpload,
 }: {
+  project: Project;
+  target: Target;
   rows: LevelMeasurement[];
   planPaths: string[];
   onRowsChange: (rows: LevelMeasurement[]) => void;
@@ -201,6 +206,24 @@ export function AttachmentFiveEditor({
         <p className="rounded-lg border border-line bg-surface-soft px-3 py-2 text-sm text-muted">
           相對高程以每一組第一列作為起算基準；若備註含「假設高程 10.000」會優先採該數值，後續列依「前一點相對高程 + 後視讀數 - 前視讀數」自動推算。
         </p>
+        <section className="rounded-lg border border-line bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold">附件五匯出預覽</h3>
+              <p className="text-sm text-muted">先檢查水準測量位置示意圖、紀錄表與照片頁，再列印另存 PDF。</p>
+            </div>
+            <PdfExportButton
+              project={project}
+              target={target}
+              floors={[]}
+              points={[]}
+              sitePhotos={[]}
+              levelMeasurements={displayRows}
+              levelPlanPaths={planPaths}
+              reportSections={[]}
+            />
+          </div>
+        </section>
       </div>
     </section>
   );

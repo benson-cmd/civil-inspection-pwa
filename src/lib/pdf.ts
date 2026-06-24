@@ -39,6 +39,7 @@ export function buildReportHtml(input: {
     ...buildMainReportPages(project, reportSections),
   ].join("");
   const attachmentBody = [
+    buildAttachmentFourPage(project, target),
     buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
     buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths),
     ...floorsWithData.map((floor, index) => buildFloorPlanPage(project, target, floor, index + 1)),
@@ -60,6 +61,26 @@ export function buildReportHtml(input: {
       ${reportBody || attachmentBody ? `${reportBody}${attachmentBody}` : buildEmptyReportPage(project)}
     </body>
   </html>`;
+}
+
+function buildAttachmentFourPage(project: Project, target: Target) {
+  const paths = project.attachmentFourPlanPaths ?? [];
+  const note = project.attachmentFourNote?.trim() ?? "";
+  if (!paths.length && !note) return "";
+
+  return `
+    <section class="page attachment-four-page">
+      <h2>社團法人臺中市土木技師公會</h2>
+      <h1>工地及鑑定標的物位置圖</h1>
+      <div class="attachment-four-meta">
+        <div>案件編號：${escapeHtml(project.caseNo)}</div>
+        <div>工程名稱：${escapeHtml(project.workName || project.projectName)}</div>
+        <div>標的物：${escapeHtml(target.address)}</div>
+      </div>
+      <div class="attachment-four-map">${serializeSimplePlan(paths)}</div>
+      <div class="attachment-four-note">${escapeHtml(note || "位置詳上圖。").replaceAll("\n", "<br>")}</div>
+      <div class="footer">附件四-1</div>
+    </section>`;
 }
 
 function buildCoverPage(project: Project) {
@@ -288,6 +309,21 @@ function calculateLevelRelativeElevation(rows: LevelMeasurement[], rowId: string
 function parseAssumedLevelElevation(note: string) {
   const match = note.match(/(?:假設高程|基準高程)\s*([+-]?\d+(?:\.\d+)?)/);
   return match ? Number(match[1]) : null;
+}
+
+const simplePlanViewBox = { width: 900, height: 620 };
+const simplePlanBackgroundPrefix = "__background_image__:";
+
+function serializeSimplePlan(paths: string[]) {
+  const backgroundImage = paths.find((path) => path.startsWith(simplePlanBackgroundPrefix))?.slice(simplePlanBackgroundPrefix.length) ?? "";
+  const drawingPaths = paths.filter((path) => !path.startsWith(simplePlanBackgroundPrefix));
+  const backgroundMarkup = backgroundImage
+    ? `<image href="${escapeHtml(backgroundImage)}" x="0" y="0" width="${simplePlanViewBox.width}" height="${simplePlanViewBox.height}" opacity="0.35" preserveAspectRatio="xMidYMid meet"/>`
+    : "";
+  const pathMarkup = drawingPaths
+    .map((path) => `<path d="${escapeHtml(path)}" fill="none" stroke="#202020" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`)
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${simplePlanViewBox.width} ${simplePlanViewBox.height}">${backgroundMarkup}${pathMarkup}</svg>`;
 }
 
 function buildLevelPhotoPage(rows: LevelMeasurement[], attachmentPage: number) {
@@ -609,6 +645,12 @@ body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", 
 .legend-arrow { color: #ff2a2a; font-size: 24px; padding: 0 3mm; }
 .legend-no-entry { display: inline-block; width: 10mm; height: 7mm; border: 1px solid #111; background: linear-gradient(to bottom right, transparent 48%, #ff8a8a 49%, #ff8a8a 51%, transparent 52%), linear-gradient(to top right, transparent 48%, #ff8a8a 49%, #ff8a8a 51%, transparent 52%); vertical-align: middle; }
 .association { position: absolute; right: 18mm; bottom: 2mm; font-size: 18px; }
+.attachment-four-page h2 { margin: 8mm 0 1mm; text-align: center; font-size: 21px; font-weight: 400; }
+.attachment-four-page h1 { margin: 0 0 6mm; text-align: center; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
+.attachment-four-meta { display: grid; gap: 2mm; border: 1px solid #111; border-bottom: 0; padding: 3mm 4mm; font-size: 15px; }
+.attachment-four-map { height: 176mm; border: 1px solid #111; display: grid; place-items: center; padding: 4mm; box-sizing: border-box; }
+.attachment-four-map svg { width: 100%; max-height: 166mm; }
+.attachment-four-note { min-height: 28mm; border: 1px solid #111; border-top: 0; padding: 4mm; font-size: 16px; line-height: 1.7; }
 .table-page h2 { margin: 8mm 0 1mm; text-align: center; font-size: 21px; font-weight: 400; }
 .table-page h1 { margin: 0 0 2mm; text-align: center; font-size: 18px; font-weight: 400; }
 .roc-date { margin: 0 0 2mm; text-align: right; font-size: 14px; padding-right: 14mm; }

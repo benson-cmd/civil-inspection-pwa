@@ -24,6 +24,8 @@ export interface Project {
   siteStatusNote?: string;
   processNote?: string;
   targetList?: TargetListItem[];
+  attachmentFourPlanPaths?: string[];
+  attachmentFourNote?: string;
   engineers?: ProjectEngineer[];
   engineerNames?: string;
   associationEngineers?: string;

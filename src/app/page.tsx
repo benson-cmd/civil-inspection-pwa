@@ -25,6 +25,7 @@ import type { FloorPlanMode } from "@/components/FloorPlanCanvas";
 import { AttachmentFiveEditor } from "@/components/AttachmentFiveEditor";
 import { AttachmentSixEditor } from "@/components/AttachmentSixEditor";
 import { InspectionForm } from "@/components/InspectionForm";
+import { MeasurementPlanEditor } from "@/components/MeasurementPlanEditor";
 import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
@@ -63,7 +64,7 @@ import type {
   TargetListItem,
 } from "@/types/inspection";
 
-type WorkspaceTab = "basic" | "main" | "attachments" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
+type WorkspaceTab = "basic" | "main" | "attachments" | "attachment4" | "attachment5" | "attachment6" | "attachment7" | "attachment8" | "export";
 type AppView = "workspace" | "users";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -658,8 +659,11 @@ export default function HomePage() {
             {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "attachment4" ? <AttachmentFourEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment5" ? (
               <AttachmentFiveEditor
+                project={activeCase.project}
+                target={activeCase.target}
                 rows={activeCase.levelMeasurements ?? []}
                 planPaths={activeCase.levelPlanPaths ?? []}
                 onRowsChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
@@ -669,6 +673,8 @@ export default function HomePage() {
             ) : null}
             {activeTab === "attachment6" ? (
               <AttachmentSixEditor
+                project={activeCase.project}
+                target={activeCase.target}
                 rows={activeCase.tiltMeasurements ?? []}
                 planPaths={activeCase.tiltPlanPaths ?? []}
                 onRowsChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
@@ -690,6 +696,7 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean
   { id: "basic", label: "基本資料", available: true },
   { id: "main", label: "封面/目錄/主文", available: true },
   { id: "attachments", label: "附件管理", available: true },
+  { id: "attachment4", label: "附件四 位置圖", available: true },
   { id: "attachment5", label: "附件五 水準測量", available: true },
   { id: "attachment6", label: "附件六 傾斜測量", available: true },
   { id: "attachment7", label: "附件七 現況照片", available: true },
@@ -1707,39 +1714,82 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
   return (
     <Panel title="附件管理" icon={<ClipboardList size={18} />}>
       <div className="grid gap-3">
-        {activeCase.attachments.map((slot) => (
-          <article key={slot.id} className="grid gap-3 rounded-md border border-line bg-white p-3 md:grid-cols-[1fr_auto]">
-            <div>
-              <div className="font-bold">附件{toChineseNumber(slot.no)}：{slot.title}</div>
-              <div className="mt-1 text-sm text-muted">
-                {slot.mode === "upload" ? "使用者上傳 PDF 資料" : "系統內編輯產生"}
+        {activeCase.attachments.map((slot) => {
+          const effectiveMode = slot.no === 5 || slot.no === 6 ? "editor" : slot.mode;
+          return (
+            <article key={slot.id} className="grid gap-3 rounded-md border border-line bg-white p-3 md:grid-cols-[1fr_auto]">
+              <div>
+                <div className="font-bold">附件{toChineseNumber(slot.no)}：{slot.title}</div>
+                <div className="mt-1 text-sm text-muted">
+                  {effectiveMode === "upload" ? "使用者上傳 PDF 資料" : "系統內編輯產生"}
+                </div>
+                {slot.fileName && effectiveMode === "upload" ? <div className="mt-1 text-sm text-accent">已選擇：{slot.fileName}</div> : null}
               </div>
-              {slot.fileName ? <div className="mt-1 text-sm text-accent">已選擇：{slot.fileName}</div> : null}
-            </div>
-            {slot.mode === "upload" ? (
-              <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-sm font-semibold text-accent">
-                上傳 PDF
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    updateAttachment({ ...slot, fileName: file.name, status: "uploaded" });
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-            ) : (
-              <span className="inline-flex min-h-11 items-center rounded-md border border-line px-3 text-sm font-semibold">
-                {slot.status === "ready" ? "已完成" : "編輯中"}
-              </span>
-            )}
-          </article>
-        ))}
+              {effectiveMode === "upload" ? (
+                <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-sm font-semibold text-accent">
+                  上傳 PDF
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      updateAttachment({ ...slot, fileName: file.name, status: "uploaded" });
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              ) : (
+                <span className="inline-flex min-h-11 items-center rounded-md border border-line px-3 text-sm font-semibold">
+                  {slot.status === "ready" ? "已完成" : "編輯中"}
+                </span>
+              )}
+            </article>
+          );
+        })}
       </div>
     </Panel>
+  );
+}
+
+function AttachmentFourEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  const project = activeCase.project;
+  const planPaths = project.attachmentFourPlanPaths ?? [];
+
+  function updateProject(patch: Partial<Project>) {
+    onChange({ ...activeCase, project: { ...project, ...patch } });
+  }
+
+  return (
+    <div className="grid gap-4">
+      <Panel title="附件四 工地及鑑定標的物位置圖" icon={<Home size={18} />}>
+        <div className="grid gap-4">
+          <MeasurementPlanEditor
+            title="工地及鑑定標的物位置圖"
+            description="可上傳位置圖底圖後手繪標示工地、鑑定標的物、道路或相對位置。"
+            paths={planPaths}
+            markers={[]}
+            onPathsChange={(attachmentFourPlanPaths) => updateProject({ attachmentFourPlanPaths })}
+            onMarkerMove={() => undefined}
+            onActiveMarkerChange={() => undefined}
+          />
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-muted">位置圖說明文字</span>
+            <textarea
+              value={project.attachmentFourNote ?? ""}
+              onChange={(event) => updateProject({ attachmentFourNote: event.target.value })}
+              rows={4}
+              placeholder="例如：本案工地位於○○路○○號，鑑定標的物位於基地周邊相鄰建物，位置詳上圖。"
+              className="w-full rounded-md border border-line bg-white p-3 text-sm leading-7"
+            />
+          </label>
+        </div>
+      </Panel>
+      <Panel title="附件四匯出預覽" icon={<FileText size={18} />}>
+        <PdfExportButton project={project} target={activeCase.target} floors={[]} points={[]} sitePhotos={[]} reportSections={[]} />
+      </Panel>
+    </div>
   );
 }
 
@@ -2421,11 +2471,7 @@ function ExportPanel({
     },
     {
       label: "附件四位置圖已完成",
-      done: isAttachmentDone(4),
-    },
-    {
-      label: "附件七已有照片點位",
-      done: (activeCase.attachmentSeven?.points ?? []).length > 0,
+      done: !!(activeCase.project.attachmentFourPlanPaths?.length || activeCase.project.attachmentFourNote?.trim()),
     },
     {
       label: "附件五水準測量已輸入",
@@ -2434,6 +2480,10 @@ function ExportPanel({
     {
       label: "附件六傾斜測量已輸入",
       done: (activeCase.tiltMeasurements ?? []).length > 0,
+    },
+    {
+      label: "附件七已有照片點位",
+      done: (activeCase.attachmentSeven?.points ?? []).length > 0,
     },
     {
       label: "附件八基地照片已新增",
@@ -2595,7 +2645,8 @@ function AddressBuilder({
   const [road, setRoad] = useState("");
   const [lane, setLane] = useState("");
   const [alley, setAlley] = useState("");
-  const [numberAndFloor, setNumberAndFloor] = useState("");
+  const [houseNo, setHouseNo] = useState("");
+  const [floorText, setFloorText] = useState("");
   const [roadOptions, setRoadOptions] = useState(commonRoadNames);
   const datalistId = useMemo(() => `road-options-${crypto.randomUUID()}`, []);
   const districts = getDistricts(city);
@@ -2624,16 +2675,19 @@ function AddressBuilder({
     return () => controller.abort();
   }, [city, district, road]);
 
-  function compose(next: { city?: string; district?: string; road?: string; lane?: string; alley?: string; numberAndFloor?: string }) {
+  function compose(next: { city?: string; district?: string; road?: string; lane?: string; alley?: string; houseNo?: string; floorText?: string }) {
     const nextCity = next.city ?? city;
     const nextDistrict = next.district ?? district;
     const nextRoad = next.road ?? road;
     const nextLane = next.lane ?? lane;
     const nextAlley = next.alley ?? alley;
-    const nextNumberAndFloor = next.numberAndFloor ?? numberAndFloor;
+    const nextHouseNo = next.houseNo ?? houseNo;
+    const nextFloorText = next.floorText ?? floorText;
     const laneText = nextLane ? `${nextLane}巷` : "";
     const alleyText = nextAlley ? `${nextAlley}弄` : "";
-    const composed = `${nextCity}${nextDistrict}${nextRoad}${laneText}${alleyText}${nextNumberAndFloor}`.trim();
+    const houseNoText = nextHouseNo ? `${nextHouseNo}號` : "";
+    const floorLabel = nextFloorText ? `${nextFloorText}樓` : "";
+    const composed = `${nextCity}${nextDistrict}${nextRoad}${laneText}${alleyText}${houseNoText}${floorLabel}`.trim();
     if (composed) onChange(composed);
   }
 
@@ -2641,9 +2695,9 @@ function AddressBuilder({
     <section className="rounded-md border border-line bg-[#fafaf6] p-3">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div className="font-bold">{title}</div>
-        <div className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County / District / Road / Lane / Alley / No.</div>
+        <div className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County / District / Road / Lane / Alley / No. / Floor</div>
       </div>
-      <div className="grid gap-3 md:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-7">
         <label className="block">
           <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
             縣市 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">County</span>
@@ -2745,17 +2799,33 @@ function AddressBuilder({
         </label>
         <label className="block">
           <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
-            號樓 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">No./Floor</span>
+            號 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">No.</span>
           </span>
           <input
             inputMode="numeric"
-            value={numberAndFloor}
+            value={houseNo}
             onChange={(event) => {
-              const nextNumberAndFloor = event.target.value;
-              setNumberAndFloor(nextNumberAndFloor);
-              compose({ numberAndFloor: nextNumberAndFloor });
+              const nextHouseNo = event.target.value.replace(/[^\dA-Za-z-]/g, "");
+              setHouseNo(nextHouseNo);
+              compose({ houseNo: nextHouseNo });
             }}
-            placeholder="例如：18號3樓"
+            placeholder="18"
+            className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-baseline gap-2 text-sm font-semibold text-muted">
+            樓 <span className="mono-data text-[10px] uppercase tracking-[0.16em] text-stone-400">Floor</span>
+          </span>
+          <input
+            inputMode="numeric"
+            value={floorText}
+            onChange={(event) => {
+              const nextFloorText = event.target.value.replace(/[^\dA-Za-z-]/g, "");
+              setFloorText(nextFloorText);
+              compose({ floorText: nextFloorText });
+            }}
+            placeholder="3"
             className="mono-data min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
           />
         </label>

@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import type { MeasurementPhoto, TiltMeasurement } from "@/types/inspection";
+import type { MeasurementPhoto, Project, Target, TiltMeasurement } from "@/types/inspection";
 import { MeasurementPlanEditor } from "@/components/MeasurementPlanEditor";
+import { PdfExportButton } from "@/components/PdfExportButton";
 
 function createRow(): TiltMeasurement {
   return {
@@ -20,12 +21,16 @@ function createRow(): TiltMeasurement {
 }
 
 export function AttachmentSixEditor({
+  project,
+  target,
   rows,
   planPaths,
   onRowsChange,
   onPlanPathsChange,
   onPhotoUpload,
 }: {
+  project: Project;
+  target: Target;
   rows: TiltMeasurement[];
   planPaths: string[];
   onRowsChange: (rows: TiltMeasurement[]) => void;
@@ -190,6 +195,24 @@ export function AttachmentSixEditor({
             </tbody>
           </table>
         </div>
+        <section className="rounded-lg border border-line bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold">附件六匯出預覽</h3>
+              <p className="text-sm text-muted">先檢查傾斜測量位置示意圖、紀錄表與 A/B 測點照片，再列印另存 PDF。</p>
+            </div>
+            <PdfExportButton
+              project={project}
+              target={target}
+              floors={[]}
+              points={[]}
+              sitePhotos={[]}
+              tiltMeasurements={displayRows}
+              tiltPlanPaths={planPaths}
+              reportSections={[]}
+            />
+          </div>
+        </section>
       </div>
     </section>
   );

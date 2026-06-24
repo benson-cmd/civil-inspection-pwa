@@ -36,6 +36,8 @@ create table public.projects (
   site_status_note text,
   process_note text,
   target_list jsonb not null default '[]'::jsonb,
+  attachment_four_plan_paths jsonb not null default '[]'::jsonb,
+  attachment_four_note text,
   engineer_names text,
   association_engineers text,
   owner_id uuid not null references public.profiles(id),
