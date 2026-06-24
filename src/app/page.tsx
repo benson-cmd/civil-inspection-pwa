@@ -30,16 +30,20 @@ import { PdfExportButton } from "@/components/PdfExportButton";
 import { PwaRegister } from "@/components/PwaRegister";
 import { buildPhotoCaption, nextPhotoNo } from "@/lib/caption";
 import {
+  addCaseMember,
   deleteManagedUser,
   deleteInspectionCase,
   clearLocalDraft,
+  fetchCaseMembers,
   fetchInspectionCases,
   fetchManagedUsers,
   loadLocalDraft,
+  removeCaseMember,
   resolveSignedInAppUser,
   saveInspectionCase,
   saveLocalDraft,
   saveManagedUser,
+  updateCaseMemberRole,
 } from "@/lib/case-store";
 import { createCase } from "@/lib/defaults";
 import { defaultFloorNames, emptyFloorRecord, floorIdForTarget } from "@/lib/floors";
@@ -48,6 +52,7 @@ import { commonRoadNames, getDistricts, taiwanAddress } from "@/lib/tw-address";
 import type {
   AppUser,
   AttachmentSlot,
+  CaseMember,
   Floor,
   FloorPlan,
   FloorPlanData,
@@ -656,7 +661,12 @@ export default function HomePage() {
               </div>
             </nav>
 
-            {activeTab === "basic" ? <BasicDataEditor activeCase={activeCase} onChange={updateCase} /> : null}
+            {activeTab === "basic" ? (
+              <>
+                <BasicDataEditor activeCase={activeCase} onChange={updateCase} />
+                <CaseCollaboratorsPanel activeCase={activeCase} currentUser={currentUser} users={managedUsers} />
+              </>
+            ) : null}
             {activeTab === "main" ? <ReportMainEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment4" ? <AttachmentFourEditor activeCase={activeCase} onChange={updateCase} /> : null}
@@ -1245,6 +1255,218 @@ function UserManagementPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+function CaseCollaboratorsPanel({
+  activeCase,
+  currentUser,
+  users,
+}: {
+  activeCase: InspectionCase;
+  currentUser: AppUser;
+  users: AppUser[];
+}) {
+  const [members, setMembers] = useState<CaseMember[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedRole, setSelectedRole] = useState<AppUser["role"]>("user");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const currentProjectMember = members.find((member) => member.id === currentUser.id);
+  const canManageMembers =
+    currentUser.role === "admin" ||
+    activeCase.createdByUserId === currentUser.id ||
+    currentProjectMember?.projectRole === "admin";
+  const memberIds = new Set(members.map((member) => member.id));
+  const availableUsers = users.filter((user) => !user.id.startsWith("pending-") && !memberIds.has(user.id));
+  const pendingUsers = users.filter((user) => user.id.startsWith("pending-"));
+
+  useEffect(() => {
+    void loadMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCase.id]);
+
+  async function loadMembers() {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setMessage("");
+    try {
+      setMembers(await fetchCaseMembers(supabase, activeCase.id));
+    } catch (error) {
+      console.error("Failed to fetch case members", error);
+      setMessage(error instanceof Error ? error.message : "共同編輯者讀取失敗。");
+    }
+  }
+
+  async function handleAddMember() {
+    if (!selectedUserId) return;
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await addCaseMember(supabase, activeCase.id, selectedUserId, selectedRole);
+      setSelectedUserId("");
+      setSelectedRole("user");
+      await loadMembers();
+      setMessage("已加入案件共同編輯者。");
+    } catch (error) {
+      console.error("Failed to add case member", error);
+      setMessage(error instanceof Error ? error.message : "共同編輯者新增失敗。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUpdateRole(member: CaseMember, projectRole: AppUser["role"]) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await updateCaseMemberRole(supabase, activeCase.id, member.id, projectRole);
+      await loadMembers();
+      setMessage("案件角色已更新。");
+    } catch (error) {
+      console.error("Failed to update case member role", error);
+      setMessage(error instanceof Error ? error.message : "案件角色更新失敗。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveMember(member: CaseMember) {
+    if (member.id === activeCase.createdByUserId) {
+      setMessage("案件建立者不能從共同編輯者中移除。");
+      return;
+    }
+
+    const confirmed = window.confirm(`確定要移除「${member.name}」對此案件的共同編輯權限嗎？`);
+    if (!confirmed) return;
+
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await removeCaseMember(supabase, activeCase.id, member.id);
+      await loadMembers();
+      setMessage("已移除共同編輯權限。");
+    } catch (error) {
+      console.error("Failed to remove case member", error);
+      setMessage(error instanceof Error ? error.message : "共同編輯者移除失敗。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="案件共同編輯者" icon={<Users size={18} />}>
+      <p className="mb-3 text-sm text-muted">
+        將已授權並已登入過的技師加入本案件後，對方登入即可在案件列表看到並共同編輯此報告。
+      </p>
+
+      {canManageMembers ? (
+        <div className="grid gap-3 rounded-lg border border-line bg-surface-soft p-3 md:grid-cols-[minmax(0,1fr)_160px_auto]">
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-muted">加入使用者</span>
+            <select
+              value={selectedUserId}
+              onChange={(event) => setSelectedUserId(event.target.value)}
+              className="min-h-11 w-full rounded-md border border-line bg-white px-3 outline-none"
+            >
+              <option value="">選擇已授權技師</option>
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}（{user.email}）
+                </option>
+              ))}
+            </select>
+          </label>
+          <SelectField
+            label="案件角色"
+            value={selectedRole}
+            options={["user", "admin"]}
+            onChange={(value) => setSelectedRole(value as AppUser["role"])}
+          />
+          <button
+            type="button"
+            disabled={!selectedUserId || busy}
+            onClick={handleAddMember}
+            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={16} /> 加入案件
+          </button>
+          {pendingUsers.length ? (
+            <p className="text-xs text-muted md:col-span-3">
+              有 {pendingUsers.length} 位使用者尚未登入過，需先請對方用 Google 帳戶登入一次，才可加入案件共同編輯。
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-line bg-surface-soft p-3 text-sm text-muted">
+          你目前是此案件的一般共同編輯者，可編輯報告內容，但不能變更案件成員。
+        </p>
+      )}
+
+      {message ? <p className="mt-3 rounded-md border border-line bg-white p-3 text-sm font-semibold text-muted">{message}</p> : null}
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-[#e7e5e4] text-left">
+              <th className="border border-line p-2">共同編輯者</th>
+              <th className="border border-line p-2">Email</th>
+              <th className="border border-line p-2">案件角色</th>
+              <th className="border border-line p-2">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((member) => {
+              const isOwner = member.id === activeCase.createdByUserId;
+              return (
+                <tr key={member.id} className="bg-white">
+                  <td className="border border-line p-2 font-bold">
+                    {member.name}
+                    {isOwner ? <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">建立者</span> : null}
+                  </td>
+                  <td className="border border-line p-2">{member.email || "尚未取得 Email"}</td>
+                  <td className="border border-line p-2">
+                    <select
+                      value={member.projectRole}
+                      disabled={!canManageMembers || isOwner || busy}
+                      onChange={(event) => void handleUpdateRole(member, event.target.value as AppUser["role"])}
+                      className="min-h-10 rounded-md border border-line bg-white px-2 disabled:opacity-70"
+                    >
+                      <option value="admin">案件管理者</option>
+                      <option value="user">共同編輯者</option>
+                    </select>
+                  </td>
+                  <td className="border border-line p-2">
+                    <button
+                      type="button"
+                      disabled={!canManageMembers || isOwner || busy}
+                      onClick={() => void handleRemoveMember(member)}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-md border border-red-200 px-3 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 size={14} /> 移除
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {!members.length ? (
+              <tr>
+                <td colSpan={4} className="border border-line bg-white p-3 text-center text-sm text-muted">
+                  尚未載入共同編輯者。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }
 

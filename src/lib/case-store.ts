@@ -4,6 +4,7 @@ import { defaultFloorNames, emptyFloorRecord, floorIdForTarget } from "@/lib/flo
 import type {
   AppUser,
   AttachmentSlot,
+  CaseMember,
   AttachmentSevenData,
   FloorPlan,
   FloorPlanData,
@@ -66,6 +67,11 @@ type ProfileRow = {
   id: string;
   email: string;
   name: string | null;
+  role: AppUser["role"];
+};
+
+type ProjectMemberRow = {
+  user_id: string;
   role: AppUser["role"];
 };
 
@@ -340,6 +346,81 @@ export async function saveManagedUser(supabase: SupabaseClient, user: AppUser, p
 export async function deleteManagedUser(supabase: SupabaseClient, user: AppUser) {
   const { error } = await supabase.from("ci_allowed_users").delete().eq("email", user.email.toLowerCase());
   if (error && !isMissingTableError(error)) throw error;
+}
+
+export async function fetchCaseMembers(supabase: SupabaseClient, projectId: string): Promise<CaseMember[]> {
+  const { data: memberRows, error: memberError } = await supabase
+    .from("ci_project_members")
+    .select("user_id, role")
+    .eq("project_id", projectId);
+
+  if (memberError) throw memberError;
+
+  const members = (memberRows ?? []) as ProjectMemberRow[];
+  const userIds = members.map((member) => member.user_id);
+  if (!userIds.length) return [];
+
+  const { data: profileRows, error: profileError } = await supabase
+    .from("ci_profiles")
+    .select("id, email, name, role")
+    .in("id", userIds);
+
+  if (profileError) throw profileError;
+
+  const profilesById = new Map(((profileRows ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]));
+  return members.map((member) => {
+    const profile = profilesById.get(member.user_id);
+    return {
+      id: member.user_id,
+      email: profile?.email ?? "",
+      name: profile?.name || profile?.email || member.user_id,
+      role: profile?.role ?? "user",
+      projectRole: member.role,
+    };
+  });
+}
+
+export async function addCaseMember(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+  projectRole: AppUser["role"],
+) {
+  const { error } = await supabase.from("ci_project_members").upsert(
+    {
+      project_id: projectId,
+      user_id: userId,
+      role: projectRole,
+    },
+    { onConflict: "project_id,user_id" },
+  );
+
+  if (error) throw error;
+}
+
+export async function updateCaseMemberRole(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+  projectRole: AppUser["role"],
+) {
+  const { error } = await supabase
+    .from("ci_project_members")
+    .update({ role: projectRole })
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+}
+
+export async function removeCaseMember(supabase: SupabaseClient, projectId: string, userId: string) {
+  const { error } = await supabase
+    .from("ci_project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+
+  if (error) throw error;
 }
 
 function profileRowToAppUser(row: ProfileRow): AppUser {

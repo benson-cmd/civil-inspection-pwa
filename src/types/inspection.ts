@@ -172,6 +172,10 @@ export interface AppUser {
   role: UserRole;
 }
 
+export interface CaseMember extends AppUser {
+  projectRole: UserRole;
+}
+
 export interface ReportSection {
   id: string;
   order: number;
