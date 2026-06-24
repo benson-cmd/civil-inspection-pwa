@@ -436,40 +436,7 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     updated_at: now,
   };
 
-  const { error: projectError } = await supabase.from("ci_projects").upsert(projectPayload, { onConflict: "id" });
-
-  if (projectError) {
-    if (
-      String(projectError.message).includes("report_status") ||
-      String(projectError.message).includes("level_plan_paths") ||
-      String(projectError.message).includes("tilt_plan_paths") ||
-      String(projectError.message).includes("work_name") ||
-      String(projectError.message).includes("final_date") ||
-      String(projectError.message).includes("survey_dates") ||
-      String(projectError.message).includes("county_city") ||
-      String(projectError.message).includes("site_status_note") ||
-      String(projectError.message).includes("process_note") ||
-      String(projectError.message).includes("target_list")
-    ) {
-      const {
-        report_status: _reportStatus,
-        level_plan_paths: _levelPlanPaths,
-        tilt_plan_paths: _tiltPlanPaths,
-        work_name: _workName,
-        final_date: _finalDate,
-        survey_dates: _surveyDates,
-        county_city: _countyCity,
-        site_status_note: _siteStatusNote,
-        process_note: _processNote,
-        target_list: _targetList,
-        ...legacyProjectPayload
-      } = projectPayload;
-      const { error: legacyProjectError } = await supabase.from("ci_projects").upsert(legacyProjectPayload, { onConflict: "id" });
-      if (legacyProjectError) throw legacyProjectError;
-    } else {
-      throw projectError;
-    }
-  }
+  await upsertProjectWithColumnFallback(supabase, projectPayload);
 
   const { error: memberError } = await supabase.from("ci_project_members").upsert(
     {
@@ -548,6 +515,31 @@ export function saveLocalDraft(inspectionCase: InspectionCase): void {
     );
   } catch {
     console.warn("localStorage 暫存失敗");
+  }
+}
+
+async function upsertProjectWithColumnFallback(supabase: SupabaseClient, projectPayload: Record<string, unknown>) {
+  const retryPayload = { ...projectPayload };
+  const optionalColumns = [
+    "report_status",
+    "level_plan_paths",
+    "tilt_plan_paths",
+    "work_name",
+    "final_date",
+    "survey_dates",
+    "county_city",
+    "site_status_note",
+    "process_note",
+    "target_list",
+  ];
+
+  for (let attempt = 0; attempt <= optionalColumns.length; attempt += 1) {
+    const { error } = await supabase.from("ci_projects").upsert(retryPayload, { onConflict: "id" });
+    if (!error) return;
+
+    const missingColumn = optionalColumns.find((column) => String(error.message).includes(column));
+    if (!missingColumn || !(missingColumn in retryPayload)) throw error;
+    delete retryPayload[missingColumn];
   }
 }
 
@@ -742,7 +734,7 @@ async function saveTiltMeasurements(supabase: SupabaseClient, inspectionCase: In
     row_order: index + 1,
     line_no: row.lineNo,
     location: row.location,
-    direction: row.direction,
+    direction: serializeTiltDirection(row.direction),
     measurement_date: row.measurementDate || null,
     x: row.x ?? null,
     y: row.y ?? null,
@@ -1001,7 +993,7 @@ async function tiltMeasurementRowToMeasurement(supabase: SupabaseClient, row: Ti
     id: row.id,
     lineNo: row.line_no ?? "",
     location: row.location ?? "",
-    direction: row.direction ?? "X向",
+    direction: parseTiltDirection(row.direction),
     measurementDate: row.measurement_date ?? "",
     x: row.x == null ? undefined : Number(row.x),
     y: row.y == null ? undefined : Number(row.y),
@@ -1105,6 +1097,15 @@ function normalizeTargetList(value: TargetListItem[] | null): TargetListItem[] {
       address: item.address,
       usage: item.usage,
     }));
+}
+
+function serializeTiltDirection(direction: TiltMeasurement["direction"]) {
+  return direction === "右傾" ? "Y向" : "X向";
+}
+
+function parseTiltDirection(direction: string | null): TiltMeasurement["direction"] {
+  if (direction === "右傾" || direction === "Y向") return "右傾";
+  return "左傾";
 }
 
 function parseEngineers(value: string | null): ProjectEngineer[] {

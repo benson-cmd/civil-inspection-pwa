@@ -114,7 +114,7 @@ function buildTableOfContentsPage(sections: ReportSection[]) {
           <tr><td class="toc-attachment-title">附件三　會勘紀錄表</td><td></td></tr>
           <tr><td class="toc-attachment-title">附件四　工地及鑑定標的物位置圖</td><td></td></tr>
           <tr><td class="toc-attachment-title">附件五　水準測量</td><td></td></tr>
-          <tr><td class="toc-attachment-title">附件六　傾斜率測量</td><td></td></tr>
+          <tr><td class="toc-attachment-title">附件六　傾斜測量</td><td></td></tr>
           <tr><td class="toc-attachment-title">附件七　鑑定標的物平面配置圖、現況調查紀錄表及照片</td><td></td></tr>
           <tr><td class="toc-attachment-title">附件八　基地現況照片</td><td></td></tr>
         </tbody>
@@ -232,11 +232,11 @@ function buildLevelMeasurementPages(project: Project, rows: LevelMeasurement[], 
 
 function buildLevelTablePage(project: Project, rows: LevelMeasurement[], attachmentPage: number) {
   const tableRows = [...rows, ...Array.from({ length: Math.max(0, 18 - rows.length) }, () => null)]
-    .map((row) =>
-      row
-        ? `<tr><td>${escapeHtml(row.pointNo)}</td><td class="text-left">${escapeHtml(row.location || `詳水準測量位置示意圖及${row.pointNo}現況照片`)}</td><td>${escapeHtml(row.relativeElevation || row.initialElevation)}</td><td class="text-left">${escapeHtml(row.note)}</td></tr>`
-        : `<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>`,
-    )
+    .map((row) => {
+      if (!row) return `<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      const relativeElevation = calculateLevelRelativeElevation(rows, row.id);
+      return `<tr><td>${escapeHtml(row.pointNo)}</td><td class="text-left">${escapeHtml(row.location)}</td><td>${escapeHtml(row.initialElevation)}</td><td>${escapeHtml(row.repeatElevation)}</td><td>${relativeElevation == null ? "" : relativeElevation.toFixed(3)}</td><td class="text-left">${escapeHtml(row.note === "基準點分組" ? "" : row.note)}</td></tr>`;
+    })
     .join("");
   return `
     <section class="page measurement-table-page">
@@ -245,12 +245,49 @@ function buildLevelTablePage(project: Project, rows: LevelMeasurement[], attachm
       <div class="measurement-subtitle"><span>時間：${formatRocDate(project.inspectionDate)}</span><span>水準測量紀錄表</span></div>
       <table class="measurement-table level-table">
         <tbody>
-          <tr><th>測點<br>編號</th><th>位置</th><th>相對<br>高程</th><th>備　　註</th></tr>
+          <tr><th>點位</th><th>後視點</th><th>後視<br>讀數</th><th>前視<br>讀數</th><th>相對<br>高程</th><th>備　　註</th></tr>
           ${tableRows}
         </tbody>
       </table>
       <div class="footer">附件五-${attachmentPage}</div>
     </section>`;
+}
+
+function calculateLevelRelativeElevation(rows: LevelMeasurement[], rowId: string) {
+  let currentElevation = 0;
+  let hasElevation = false;
+
+  for (const row of rows) {
+    if (!row.pointNo && !row.location && row.note === "基準點分組") {
+      currentElevation = 0;
+      hasElevation = false;
+      if (row.id === rowId) return null;
+      continue;
+    }
+
+    const assumedElevation = parseAssumedLevelElevation(row.note);
+    const backSight = parseFloat(row.initialElevation);
+    const foreSight = parseFloat(row.repeatElevation);
+
+    if (assumedElevation != null) {
+      currentElevation = assumedElevation;
+      hasElevation = true;
+    } else if (!hasElevation) {
+      currentElevation = 0;
+      hasElevation = true;
+    } else if (Number.isFinite(backSight) && Number.isFinite(foreSight)) {
+      currentElevation = currentElevation + backSight - foreSight;
+    }
+
+    if (row.id === rowId) return hasElevation ? currentElevation : null;
+  }
+
+  return null;
+}
+
+function parseAssumedLevelElevation(note: string) {
+  const match = note.match(/(?:假設高程|基準高程)\s*([+-]?\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
 }
 
 function buildLevelPhotoPage(rows: LevelMeasurement[], attachmentPage: number) {

@@ -691,7 +691,7 @@ const workspaceTabs: Array<{ id: WorkspaceTab; label: string; available: boolean
   { id: "main", label: "封面/目錄/主文", available: true },
   { id: "attachments", label: "附件管理", available: true },
   { id: "attachment5", label: "附件五 水準測量", available: true },
-  { id: "attachment6", label: "附件六 傾斜率", available: true },
+  { id: "attachment6", label: "附件六 傾斜測量", available: true },
   { id: "attachment7", label: "附件七 現況照片", available: true },
   { id: "attachment8", label: "附件八 基地照片", available: true },
   { id: "export", label: "匯出報告", available: true },
@@ -1023,10 +1023,10 @@ function buildBasicReportSectionContent(activeCase: InspectionCase): Record<stri
     "survey-dates": `${surveyDatesText}\n（會勘通知函詳附件二。）`,
     "inspection-dates": `${surveyDatesText}\n（會勘通知函詳附件二。）`,
     staff: `申請單位代表：${project.applicantName}\n社團法人臺中市土木技師公會：${engineerNames}　技師\n所有權人代表：詳附件三。`,
-    process: `申請人於${applicationDate}向本會提出本案施工前之鄰房現況鑑定申請(本會收文號${receivedNo})，本會即指派${engineerNames}技師負責辦理本案建築物現況鑑定工作。本會鑑定技師依照會勘通知函時間前往現場進行會勘作業。\n\n鑑定技師將可見範圍內鑑定標的物之裂縫及瑕疵等現況拍照、繪製圖說並做成紀錄(詳附件七)。本案目前已建立${targetCount}戶現況調查，及全${targetListCount}棟建築物之鑑定標的物之水準測量(詳附件五)及傾斜率測量(詳附件六)。${processNoteText}`,
+    process: `申請人於${applicationDate}向本會提出本案施工前之鄰房現況鑑定申請(本會收文號${receivedNo})，本會即指派${engineerNames}技師負責辦理本案建築物現況鑑定工作。本會鑑定技師依照會勘通知函時間前往現場進行會勘作業。\n\n鑑定技師將可見範圍內鑑定標的物之裂縫及瑕疵等現況拍照、繪製圖說並做成紀錄(詳附件七)。本案目前已建立${targetCount}戶現況調查，及全${targetListCount}棟建築物之鑑定標的物之水準測量(詳附件五)及傾斜測量(詳附件六)。${processNoteText}`,
     "site-status": project.siteStatusNote?.trim() || "本案會勘時，工程尚未施工(詳附件八)。",
     "target-status": buildTargetUsageText(activeCase),
-    attachments: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
+    attachments: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
   };
 }
 
@@ -2382,6 +2382,10 @@ function ExportPanel({
   floors: Floor[];
   points: InspectionPoint[];
 }) {
+  const isAttachmentDone = (no: number) => {
+    const slot = activeCase.attachments.find((attachment) => attachment.no === no);
+    return slot?.status === "uploaded" || slot?.status === "ready" || slot?.status === "editing";
+  };
   const checks = [
     {
       label: "案件編號已填寫",
@@ -2404,6 +2408,22 @@ function ExportPanel({
       done: !!activeCase.target?.address.trim(),
     },
     {
+      label: "附件一鑑定申請書已上傳",
+      done: isAttachmentDone(1),
+    },
+    {
+      label: "附件二會勘通知函已上傳",
+      done: isAttachmentDone(2),
+    },
+    {
+      label: "附件三會勘紀錄表已上傳",
+      done: isAttachmentDone(3),
+    },
+    {
+      label: "附件四位置圖已完成",
+      done: isAttachmentDone(4),
+    },
+    {
       label: "附件七已有照片點位",
       done: (activeCase.attachmentSeven?.points ?? []).length > 0,
     },
@@ -2412,8 +2432,12 @@ function ExportPanel({
       done: (activeCase.levelMeasurements ?? []).length > 0,
     },
     {
-      label: "附件六傾斜率測量已輸入",
+      label: "附件六傾斜測量已輸入",
       done: (activeCase.tiltMeasurements ?? []).length > 0,
+    },
+    {
+      label: "附件八基地照片已新增",
+      done: (activeCase.sitePhotos ?? []).length > 0,
     },
   ];
   const doneCount = checks.filter((check) => check.done).length;

@@ -55,6 +55,12 @@ export function AttachmentFiveEditor({
     setActiveRowId(next[next.length - 1].id);
   }
 
+  function addSeparatorRow() {
+    const next = [...displayRows, { ...createRow(), note: "基準點分組" }];
+    onRowsChange(next);
+    setActiveRowId(next[next.length - 1].id);
+  }
+
   function removeRow(rowId: string) {
     const next = displayRows.filter((row) => row.id !== rowId);
     const safeNext = next.length ? next : [createRow()];
@@ -77,6 +83,13 @@ export function AttachmentFiveEditor({
         >
           <Plus size={18} /> 新增測點
         </button>
+        <button
+          type="button"
+          onClick={addSeparatorRow}
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-bold text-accent"
+        >
+          <Plus size={18} /> 新增基準點分組
+        </button>
       </div>
 
       <div className="grid gap-4">
@@ -92,15 +105,14 @@ export function AttachmentFiveEditor({
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] border-collapse text-sm">
+          <table className="w-full min-w-[1120px] border-collapse text-sm">
             <thead>
               <tr className="bg-[#e7e5e4] text-left">
-                <th className="border border-line p-2">測點編號</th>
-                <th className="border border-line p-2">位置</th>
-                <th className="border border-line p-2">日期</th>
-                <th className="border border-line p-2 whitespace-nowrap">初測高程 m</th>
-                <th className="border border-line p-2 whitespace-nowrap">複測高程 m</th>
-                <th className="border border-line p-2 whitespace-nowrap">高程差(m)</th>
+                <th className="border border-line p-2">點位</th>
+                <th className="border border-line p-2">後視點</th>
+                <th className="border border-line p-2 whitespace-nowrap">標尺讀數-後視</th>
+                <th className="border border-line p-2 whitespace-nowrap">標尺讀數-前視</th>
+                <th className="border border-line p-2 whitespace-nowrap">相對高程(m)</th>
                 <th className="border border-line p-2">備註</th>
                 <th className="border border-line p-2">測點照片</th>
                 <th className="border border-line p-2">操作</th>
@@ -108,16 +120,13 @@ export function AttachmentFiveEditor({
             </thead>
             <tbody>
               {displayRows.map((row) => {
-                const initial = parseFloat(row.initialElevation) || 0;
-                const repeat = parseFloat(row.repeatElevation) || 0;
-                const diff = repeat - initial;
-                const hasElevation = initial !== 0 || repeat !== 0;
-                const isWarning = Math.abs(diff) > 0.01;
+                const relativeElevation = calculateRelativeElevation(displayRows, row.id);
+                const isSeparator = !row.pointNo && !row.location && row.note === "基準點分組";
 
                 return (
                   <tr
                     key={row.id}
-                    className={row.id === activeRow?.id ? "bg-green-50" : "bg-white"}
+                    className={isSeparator ? "bg-stone-100" : row.id === activeRow?.id ? "bg-green-50" : "bg-white"}
                     onClick={() => setActiveRowId(row.id)}
                   >
                     <td className="border border-line p-2">
@@ -126,19 +135,16 @@ export function AttachmentFiveEditor({
                     <td className="border border-line p-2">
                       <TableInput
                         value={row.location}
-                        placeholder={`詳水準測量位置示意圖及${row.pointNo || "測點"}現況照片`}
+                        placeholder="如 BM1 / H1 / 另一起算基準點"
                         onChange={(location) => updateRow(row.id, { location })}
                       />
-                    </td>
-                    <td className="border border-line p-2">
-                      <TableInput type="date" value={row.measurementDate ?? ""} onChange={(measurementDate) => updateRow(row.id, { measurementDate })} />
                     </td>
                     <td className="border border-line p-2">
                       <TableInput
                         type="number"
                         inputMode="decimal"
                         value={row.initialElevation}
-                        onChange={(initialElevation) => updateRow(row.id, { initialElevation, relativeElevation: initialElevation })}
+                        onChange={(initialElevation) => updateRow(row.id, { initialElevation })}
                       />
                     </td>
                     <td className="border border-line p-2">
@@ -149,12 +155,11 @@ export function AttachmentFiveEditor({
                         onChange={(repeatElevation) => updateRow(row.id, { repeatElevation })}
                       />
                     </td>
-                    <td className={`mono-data border border-line p-2 text-center ${isWarning ? "bg-orange-50 font-bold text-orange-700" : ""}`}>
-                      {hasElevation ? `${diff >= 0 ? "+" : ""}${diff.toFixed(3)}` : "—"}
-                      {isWarning ? " ⚠️" : ""}
+                    <td className="mono-data border border-line p-2 text-center font-bold">
+                      {relativeElevation == null ? "—" : relativeElevation.toFixed(3)}
                     </td>
                     <td className="border border-line p-2">
-                      <TableInput value={row.note} onChange={(note) => updateRow(row.id, { note })} />
+                      <TableInput value={row.note} placeholder="如：基準點假設高程 10.000" onChange={(note) => updateRow(row.id, { note })} />
                     </td>
                     <td className="border border-line p-2">
                       <PhotoUploader
@@ -193,17 +198,49 @@ export function AttachmentFiveEditor({
             </tbody>
           </table>
         </div>
-        {displayRows.some((row) => {
-          const diff = (parseFloat(row.repeatElevation) || 0) - (parseFloat(row.initialElevation) || 0);
-          return Math.abs(diff) > 0.01;
-        }) ? (
-          <p className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700">
-            ⚠️ 高程差超過 10mm 的測點請確認是否需要說明。
-          </p>
-        ) : null}
+        <p className="rounded-lg border border-line bg-surface-soft px-3 py-2 text-sm text-muted">
+          相對高程以每一組第一列作為起算基準；若備註含「假設高程 10.000」會優先採該數值，後續列依「前一點相對高程 + 後視讀數 - 前視讀數」自動推算。
+        </p>
       </div>
     </section>
   );
+}
+
+function calculateRelativeElevation(rows: LevelMeasurement[], rowId: string) {
+  let currentElevation = 0;
+  let hasElevation = false;
+
+  for (const row of rows) {
+    if (!row.pointNo && !row.location && row.note === "基準點分組") {
+      currentElevation = 0;
+      hasElevation = false;
+      if (row.id === rowId) return null;
+      continue;
+    }
+
+    const assumedElevation = parseAssumedElevation(row.note);
+    const backSight = parseFloat(row.initialElevation);
+    const foreSight = parseFloat(row.repeatElevation);
+
+    if (assumedElevation != null) {
+      currentElevation = assumedElevation;
+      hasElevation = true;
+    } else if (!hasElevation) {
+      currentElevation = 0;
+      hasElevation = true;
+    } else if (Number.isFinite(backSight) && Number.isFinite(foreSight)) {
+      currentElevation = currentElevation + backSight - foreSight;
+    }
+
+    if (row.id === rowId) return hasElevation ? currentElevation : null;
+  }
+
+  return null;
+}
+
+function parseAssumedElevation(note: string) {
+  const match = note.match(/(?:假設高程|基準高程)\s*([+-]?\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
 }
 
 function PhotoUploader({ row, onUpload }: { row: LevelMeasurement; onUpload: (file: File) => void }) {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type { ChangeEvent } from "react";
 import type { PointerEvent } from "react";
 import type { ReactNode } from "react";
-import { Eraser, LocateFixed, Move, Pencil, RotateCcw, Slash } from "lucide-react";
+import { Eraser, ImageOff, ImagePlus, LocateFixed, Move, Pencil, RotateCcw, Slash } from "lucide-react";
 
 export interface MeasurementMarker {
   id: string;
@@ -15,6 +16,7 @@ export interface MeasurementMarker {
 type Mode = "draw" | "line" | "marker" | "move" | "erase";
 
 const viewBox = { width: 900, height: 620 };
+const backgroundPrefix = "__background_image__:";
 
 export function MeasurementPlanEditor({
   title,
@@ -40,8 +42,26 @@ export function MeasurementPlanEditor({
   const [draftPath, setDraftPath] = useState("");
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
 
-  const drawablePaths = draftPath ? [...paths, draftPath] : paths;
+  const backgroundImage = getBackgroundImage(paths);
+  const drawingPaths = getDrawingPaths(paths);
+  const drawablePaths = draftPath ? [...drawingPaths, draftPath] : drawingPaths;
   const activeMarker = markers.find((marker) => marker.id === activeMarkerId);
+
+  function updateDrawingPaths(nextDrawingPaths: string[]) {
+    onPathsChange(backgroundImage ? [`${backgroundPrefix}${backgroundImage}`, ...nextDrawingPaths] : nextDrawingPaths);
+  }
+
+  function handleBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      onPathsChange([`${backgroundPrefix}${dataUrl}`, ...drawingPaths]);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
 
   function getSvgPoint(event: PointerEvent<SVGSVGElement> | PointerEvent<SVGGElement>) {
     const rect = event.currentTarget.ownerSVGElement
@@ -89,7 +109,7 @@ export function MeasurementPlanEditor({
       return;
     }
     if (!draftPath) return;
-    onPathsChange([...paths, draftPath]);
+    updateDrawingPaths([...drawingPaths, draftPath]);
     setDraftPath("");
     setLineStart(null);
   }
@@ -107,9 +127,22 @@ export function MeasurementPlanEditor({
           <ToolButton active={mode === "marker"} onClick={() => setMode("marker")} icon={<LocateFixed size={16} />} label="標示測點" />
           <ToolButton active={mode === "move"} onClick={() => setMode("move")} icon={<Move size={16} />} label="移動測點" />
           <ToolButton active={mode === "erase"} onClick={() => setMode("erase")} icon={<Eraser size={16} />} label="橡皮擦" />
+          <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold">
+            <ImagePlus size={16} /> 底圖
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleBackgroundUpload} />
+          </label>
+          {backgroundImage ? (
+            <button
+              type="button"
+              onClick={() => onPathsChange(drawingPaths)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-danger"
+            >
+              <ImageOff size={16} /> 移除底圖
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => onPathsChange(paths.slice(0, -1))}
+            onClick={() => updateDrawingPaths(drawingPaths.slice(0, -1))}
             className="inline-flex min-h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold"
           >
             <RotateCcw size={16} /> 復原
@@ -130,6 +163,18 @@ export function MeasurementPlanEditor({
           </pattern>
         </defs>
         <rect width={viewBox.width} height={viewBox.height} fill="url(#measurement-grid)" />
+        {backgroundImage ? (
+          <image
+            href={backgroundImage}
+            x="0"
+            y="0"
+            width={viewBox.width}
+            height={viewBox.height}
+            opacity="0.35"
+            preserveAspectRatio="xMidYMid meet"
+            pointerEvents="none"
+          />
+        ) : null}
         {drawablePaths.map((path, index) => (
           <path
             key={`${path}-${index}`}
@@ -140,9 +185,9 @@ export function MeasurementPlanEditor({
             strokeLinejoin="round"
             strokeWidth={mode === "erase" ? 12 : 4}
             onPointerDown={(event) => {
-              if (mode !== "erase" || index >= paths.length) return;
+              if (mode !== "erase" || index >= drawingPaths.length) return;
               event.stopPropagation();
-              onPathsChange(paths.filter((_, pathIndex) => pathIndex !== index));
+              updateDrawingPaths(drawingPaths.filter((_, pathIndex) => pathIndex !== index));
             }}
           />
         ))}
@@ -185,7 +230,7 @@ export function MeasurementPlanEditor({
         <span>先在下方表格選取一列，再用「標示測點」點在圖上；已標示測點可用「移動測點」調整。</span>
         <button
           type="button"
-          onClick={() => onPathsChange([])}
+          onClick={() => onPathsChange(backgroundImage ? [`${backgroundPrefix}${backgroundImage}`] : [])}
           className="rounded-md border border-line bg-white px-2 py-1 font-semibold"
         >
           清空示意線
@@ -196,7 +241,8 @@ export function MeasurementPlanEditor({
 }
 
 export function serializeMeasurementPlanToSvg(paths: string[], markers: MeasurementMarker[]) {
-  const pathMarkup = paths
+  const backgroundImage = getBackgroundImage(paths);
+  const pathMarkup = getDrawingPaths(paths)
     .map((path) => `<path d="${path}" fill="none" stroke="#202020" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`)
     .join("");
   const markerMarkup = markers
@@ -206,7 +252,18 @@ export function serializeMeasurementPlanToSvg(paths: string[], markers: Measurem
         `<g><line x1="${(marker.x ?? 0) - 12}" y1="${marker.y}" x2="${(marker.x ?? 0) + 12}" y2="${marker.y}" stroke="#c5161d" stroke-width="3"/><line x1="${marker.x}" y1="${(marker.y ?? 0) - 12}" x2="${marker.x}" y2="${(marker.y ?? 0) + 12}" stroke="#c5161d" stroke-width="3"/><text x="${(marker.x ?? 0) + 14}" y="${(marker.y ?? 0) - 8}" fill="#c5161d" font-size="24" font-weight="700">${escapeXml(marker.label)}</text></g>`,
     )
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBox.width} ${viewBox.height}">${pathMarkup}${markerMarkup}</svg>`;
+  const backgroundMarkup = backgroundImage
+    ? `<image href="${escapeXml(backgroundImage)}" x="0" y="0" width="${viewBox.width}" height="${viewBox.height}" opacity="0.35" preserveAspectRatio="xMidYMid meet"/>`
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBox.width} ${viewBox.height}">${backgroundMarkup}${pathMarkup}${markerMarkup}</svg>`;
+}
+
+function getBackgroundImage(paths: string[]) {
+  return paths.find((path) => path.startsWith(backgroundPrefix))?.slice(backgroundPrefix.length) ?? "";
+}
+
+function getDrawingPaths(paths: string[]) {
+  return paths.filter((path) => !path.startsWith(backgroundPrefix));
 }
 
 function ToolButton({

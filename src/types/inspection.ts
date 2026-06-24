@@ -90,7 +90,7 @@ export interface TiltMeasurement {
   id: string;
   lineNo: string;
   location: string;
-  direction: "X向" | "Y向";
+  direction: "左傾" | "右傾";
   measurementDate?: string;
   x?: number;
   y?: number;

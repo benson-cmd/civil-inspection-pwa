@@ -10,7 +10,7 @@ function createRow(): TiltMeasurement {
     id: crypto.randomUUID(),
     lineNo: "",
     location: "",
-    direction: "X向",
+    direction: "左傾",
     measurementDate: "",
     upperDistance: "",
     lowerDistance: "",
@@ -68,8 +68,8 @@ export function AttachmentSixEditor({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Vertical Tilt Survey</p>
-          <h2 className="text-lg font-bold">附件六 傾斜率測量</h2>
-          <p className="text-sm text-muted">依範例建立傾斜率紀錄總表、測量位置示意圖與 A/B 測點照片。</p>
+          <h2 className="text-lg font-bold">附件六 傾斜測量</h2>
+          <p className="text-sm text-muted">建立傾斜測量紀錄總表、測量位置示意圖與 A/B 測點照片。</p>
         </div>
         <button
           type="button"
@@ -137,8 +137,8 @@ export function AttachmentSixEditor({
                         onChange={(event) => updateRow(row.id, { direction: event.target.value as TiltMeasurement["direction"] })}
                         className="min-h-10 w-full rounded-md border border-line bg-white px-2 outline-none"
                       >
-                        <option value="X向">X向</option>
-                        <option value="Y向">Y向</option>
+                        <option value="左傾">左傾</option>
+                        <option value="右傾">右傾</option>
                       </select>
                     </td>
                     <td className="border border-line p-2">

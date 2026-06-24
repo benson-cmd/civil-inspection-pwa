@@ -146,7 +146,7 @@ export function createDefaultSections(project: Project): ReportSection[] {
       title: "十一、附件",
       source: "attachments",
       fixedTitle: true,
-      content: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜率測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
+      content: "附件一：鑑定申請書\n附件二：會勘通知函\n附件三：會勘紀錄表\n附件四：工地及鑑定標的物位置圖\n附件五：水準測量\n附件六：傾斜測量\n附件七：鑑定標的物平面配置圖、現況調查紀錄表及照片\n附件八：基地現況照片",
     },
   ];
 }
@@ -165,7 +165,7 @@ export function createDefaultAttachments(): AttachmentSlot[] {
     { id: "att-3", no: 3, title: "會勘紀錄表", mode: "upload", status: "empty" },
     { id: "att-4", no: 4, title: "工地及鑑定標的物位置圖", mode: "editor", status: "editing" },
     { id: "att-5", no: 5, title: "水準測量", mode: "upload", status: "empty" },
-    { id: "att-6", no: 6, title: "傾斜率測量", mode: "upload", status: "empty" },
+    { id: "att-6", no: 6, title: "傾斜測量", mode: "upload", status: "empty" },
     { id: "att-7", no: 7, title: "鑑定標的物平面配置圖、現況調查紀錄表及照片", mode: "editor", status: "editing" },
     { id: "att-8", no: 8, title: "基地現況照片", mode: "editor", status: "editing" },
   ];
