@@ -24,6 +24,7 @@ export function createCase(userId: string): InspectionCase {
     processNote: "",
     targetList: [],
     attachmentFourPlanPaths: [],
+    attachmentFourMarkers: [],
     attachmentFourNote: "",
     engineers: [{ id: crypto.randomUUID(), name: "", memberNo: "" }],
     engineerNames: "",

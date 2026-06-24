@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import type { Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
+import type { AttachmentSlot, Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildReportHtml } from "@/lib/pdf";
 
 interface PdfExportButtonProps {
@@ -15,6 +15,7 @@ interface PdfExportButtonProps {
   tiltMeasurements?: TiltMeasurement[];
   tiltPlanPaths?: string[];
   reportSections?: ReportSection[];
+  attachments?: AttachmentSlot[];
   completionWarning?: {
     pct: number;
     doneCount: number;
@@ -33,6 +34,7 @@ export function PdfExportButton({
   tiltMeasurements = [],
   tiltPlanPaths = [],
   reportSections = [],
+  attachments = [],
   completionWarning,
 }: PdfExportButtonProps) {
   const checklist = buildExportChecklist({
@@ -76,6 +78,7 @@ export function PdfExportButton({
           tiltMeasurements,
           tiltPlanPaths,
           reportSections,
+          attachments,
         });
         const previewHtml = buildPreviewHtml(html, project.caseNo || "inspection-report");
         const printWindow = window.open("", "_blank");

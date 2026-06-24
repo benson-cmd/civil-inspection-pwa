@@ -59,6 +59,7 @@ import type {
   FloorName,
   InspectionCase,
   InspectionPoint,
+  MapMarker,
   NoEntryZone,
   Project,
   ProjectEngineer,
@@ -671,26 +672,34 @@ export default function HomePage() {
             {activeTab === "attachments" ? <AttachmentManager activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment4" ? <AttachmentFourEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment5" ? (
-              <AttachmentFiveEditor
-                project={activeCase.project}
-                target={activeCase.target}
-                rows={activeCase.levelMeasurements ?? []}
-                planPaths={activeCase.levelPlanPaths ?? []}
-                onRowsChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
-                onPlanPathsChange={(levelPlanPaths) => updateCase({ ...activeCase, levelPlanPaths })}
-                onPhotoUpload={(row, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-five/${row.id}`, file)}
-              />
+              getAttachmentSlot(activeCase, 5)?.mode === "upload" ? (
+                <AttachmentPdfModePanel slot={getAttachmentSlot(activeCase, 5)} />
+              ) : (
+                <AttachmentFiveEditor
+                  project={activeCase.project}
+                  target={activeCase.target}
+                  rows={activeCase.levelMeasurements ?? []}
+                  planPaths={activeCase.levelPlanPaths ?? []}
+                  onRowsChange={(levelMeasurements) => updateCase({ ...activeCase, levelMeasurements })}
+                  onPlanPathsChange={(levelPlanPaths) => updateCase({ ...activeCase, levelPlanPaths })}
+                  onPhotoUpload={(row, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-five/${row.id}`, file)}
+                />
+              )
             ) : null}
             {activeTab === "attachment6" ? (
-              <AttachmentSixEditor
-                project={activeCase.project}
-                target={activeCase.target}
-                rows={activeCase.tiltMeasurements ?? []}
-                planPaths={activeCase.tiltPlanPaths ?? []}
-                onRowsChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
-                onPlanPathsChange={(tiltPlanPaths) => updateCase({ ...activeCase, tiltPlanPaths })}
-                onPhotoUpload={(row, slot, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-six/${row.id}/${slot}`, file)}
-              />
+              getAttachmentSlot(activeCase, 6)?.mode === "upload" ? (
+                <AttachmentPdfModePanel slot={getAttachmentSlot(activeCase, 6)} />
+              ) : (
+                <AttachmentSixEditor
+                  project={activeCase.project}
+                  target={activeCase.target}
+                  rows={activeCase.tiltMeasurements ?? []}
+                  planPaths={activeCase.tiltPlanPaths ?? []}
+                  onRowsChange={(tiltMeasurements) => updateCase({ ...activeCase, tiltMeasurements })}
+                  onPlanPathsChange={(tiltPlanPaths) => updateCase({ ...activeCase, tiltPlanPaths })}
+                  onPhotoUpload={(row, slot, file) => uploadInspectionPhoto(activeCase.project.id, `attachment-six/${row.id}/${slot}`, file)}
+                />
+              )
             ) : null}
             {activeTab === "attachment7" ? <AttachmentSevenEditor activeCase={activeCase} onChange={updateCase} /> : null}
             {activeTab === "attachment8" ? <AttachmentEightEditor activeCase={activeCase} onChange={updateCase} /> : null}
@@ -863,6 +872,10 @@ function formatEngineerNames(project: Project) {
     .join("、");
 }
 
+function getAttachmentSlot(activeCase: InspectionCase, no: number) {
+  return activeCase.attachments.find((attachment) => attachment.no === no);
+}
+
 function reportStatusBadgeClass(status: ReportStatus) {
   if (status === "審閱中") return "bg-blue-100 text-blue-700";
   if (status === "待補件") return "bg-orange-100 text-orange-700";
@@ -899,6 +912,34 @@ async function uploadInspectionPhoto(projectId: string, scope: string, file: Fil
 
   return {
     imageUrl: signedData?.signedUrl ?? fallbackUrl,
+    storagePath,
+  };
+}
+
+async function uploadAttachmentPdf(projectId: string, attachmentNo: number, file: File) {
+  const supabase = createSupabaseBrowserClient();
+  if (!supabase) return { fileName: file.name };
+
+  const safeName = file.name.replace(/[^\w.-]+/g, "-");
+  const storagePath = `${projectId}/attachment-${attachmentNo}/${crypto.randomUUID()}-${safeName}`;
+  const { error: uploadError } = await supabase.storage
+    .from("ci-inspection-attachments")
+    .upload(storagePath, file, {
+      contentType: file.type || "application/pdf",
+      upsert: true,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from("ci-inspection-attachments")
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+
+  if (signedError) throw signedError;
+
+  return {
+    fileName: file.name,
+    fileUrl: signedData.signedUrl,
     storagePath,
   };
 }
@@ -1926,6 +1967,8 @@ function ReportMainEditor({ activeCase, onChange }: { activeCase: InspectionCase
 }
 
 function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
+  const [busySlotId, setBusySlotId] = useState<string | null>(null);
+
   function updateAttachment(nextSlot: AttachmentSlot) {
     onChange({
       ...activeCase,
@@ -1933,23 +1976,72 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
     });
   }
 
+  async function handleAttachmentUpload(slot: AttachmentSlot, file: File) {
+    setBusySlotId(slot.id);
+    try {
+      const uploaded = await uploadAttachmentPdf(activeCase.project.id, slot.no, file);
+      updateAttachment({
+        ...slot,
+        fileName: uploaded.fileName,
+        fileUrl: uploaded.fileUrl,
+        storagePath: uploaded.storagePath,
+        status: "uploaded",
+      });
+    } catch (error) {
+      console.error("Failed to upload attachment PDF", error);
+      window.alert(error instanceof Error ? error.message : "附件 PDF 上傳失敗，請稍後再試。");
+    } finally {
+      setBusySlotId(null);
+    }
+  }
+
   return (
     <Panel title="附件管理" icon={<ClipboardList size={18} />}>
       <div className="grid gap-3">
         {activeCase.attachments.map((slot) => {
-          const effectiveMode = slot.no === 5 || slot.no === 6 ? "editor" : slot.mode;
+          const canSwitchMode = slot.no === 5 || slot.no === 6;
+          const effectiveMode = slot.mode;
           return (
             <article key={slot.id} className="grid gap-3 rounded-md border border-line bg-white p-3 md:grid-cols-[1fr_auto]">
               <div>
                 <div className="font-bold">附件{toChineseNumber(slot.no)}：{slot.title}</div>
                 <div className="mt-1 text-sm text-muted">
-                  {effectiveMode === "upload" ? "使用者上傳 PDF 資料" : "系統內編輯產生"}
+                  {effectiveMode === "upload" ? "採用外部 PDF 報告" : "系統內編輯產生"}
                 </div>
-                {slot.fileName && effectiveMode === "upload" ? <div className="mt-1 text-sm text-accent">已選擇：{slot.fileName}</div> : null}
+                {slot.fileName && effectiveMode === "upload" ? (
+                  <div className="mt-1 text-sm text-accent">
+                    已上傳：
+                    {slot.fileUrl ? (
+                      <a href={slot.fileUrl} target="_blank" rel="noreferrer" className="underline">
+                        {slot.fileName}
+                      </a>
+                    ) : (
+                      slot.fileName
+                    )}
+                  </div>
+                ) : null}
+                {canSwitchMode ? (
+                  <div className="mt-3 inline-flex rounded-md border border-line bg-surface-soft p-1 text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => updateAttachment({ ...slot, mode: "editor", status: slot.status === "uploaded" ? "editing" : slot.status })}
+                      className={`rounded px-3 py-1.5 ${effectiveMode === "editor" ? "bg-accent text-white" : "text-muted"}`}
+                    >
+                      現場作業模式
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateAttachment({ ...slot, mode: "upload", status: slot.fileName ? "uploaded" : "empty" })}
+                      className={`rounded px-3 py-1.5 ${effectiveMode === "upload" ? "bg-accent text-white" : "text-muted"}`}
+                    >
+                      試驗室 PDF
+                    </button>
+                  </div>
+                ) : null}
               </div>
               {effectiveMode === "upload" ? (
                 <label className="relative inline-flex min-h-11 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-accent bg-[#f5f5f4] px-3 text-sm font-semibold text-accent">
-                  上傳 PDF
+                  {busySlotId === slot.id ? "上傳中..." : "上傳 PDF"}
                   <input
                     type="file"
                     accept="application/pdf"
@@ -1957,7 +2049,7 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
-                      updateAttachment({ ...slot, fileName: file.name, status: "uploaded" });
+                      void handleAttachmentUpload(slot, file);
                       event.target.value = "";
                     }}
                   />
@@ -1975,26 +2067,114 @@ function AttachmentManager({ activeCase, onChange }: { activeCase: InspectionCas
   );
 }
 
+function AttachmentPdfModePanel({ slot }: { slot?: AttachmentSlot }) {
+  return (
+    <Panel title={`附件${slot ? toChineseNumber(slot.no) : ""} ${slot?.title ?? ""}`} icon={<FileText size={18} />}>
+      <div className="rounded-lg border border-line bg-surface-soft p-4">
+        <div className="text-base font-bold">目前採用試驗室 PDF 模式</div>
+        <p className="mt-2 text-sm text-muted">
+          這個附件會採用「附件管理」中上傳的 PDF，不使用系統內現場輸入表格。
+        </p>
+        {slot?.fileUrl ? (
+          <a
+            href={slot.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white"
+          >
+            <FileText size={16} /> 開啟已上傳 PDF
+          </a>
+        ) : (
+          <p className="mt-4 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">
+            尚未上傳 PDF，請到「附件管理」上傳。
+          </p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function AttachmentFourEditor({ activeCase, onChange }: { activeCase: InspectionCase; onChange: (nextCase: InspectionCase) => void }) {
   const project = activeCase.project;
   const planPaths = project.attachmentFourPlanPaths ?? [];
+  const markers = project.attachmentFourMarkers ?? [];
+  const [activeMarkerId, setActiveMarkerId] = useState(markers[0]?.id ?? "");
 
   function updateProject(patch: Partial<Project>) {
     onChange({ ...activeCase, project: { ...project, ...patch } });
+  }
+
+  function addMarker() {
+    const nextMarker: MapMarker = {
+      id: crypto.randomUUID(),
+      label: `標示${markers.length + 1}`,
+      x: 450,
+      y: 310,
+    };
+    updateProject({ attachmentFourMarkers: [...markers, nextMarker] });
+    setActiveMarkerId(nextMarker.id);
+  }
+
+  function updateMarker(id: string, patch: Partial<MapMarker>) {
+    updateProject({
+      attachmentFourMarkers: markers.map((marker) => (marker.id === id ? { ...marker, ...patch } : marker)),
+    });
+  }
+
+  function removeMarker(id: string) {
+    const nextMarkers = markers.filter((marker) => marker.id !== id);
+    updateProject({ attachmentFourMarkers: nextMarkers });
+    setActiveMarkerId(nextMarkers[0]?.id ?? "");
   }
 
   return (
     <div className="grid gap-4">
       <Panel title="附件四 工地及鑑定標的物位置圖" icon={<Home size={18} />}>
         <div className="grid gap-4">
+          <div className="rounded-lg border border-line bg-surface-soft p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="font-bold">位置圖標示點</div>
+                <p className="text-xs text-muted">新增後可在圖上切換「標示測點」或「移動測點」調整位置。</p>
+              </div>
+              <button
+                type="button"
+                onClick={addMarker}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md bg-accent px-3 text-sm font-bold text-white"
+              >
+                <Plus size={16} /> 新增標示點
+              </button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {markers.map((marker) => (
+                <div key={marker.id} className="grid gap-2 rounded-md border border-line bg-white p-2 md:grid-cols-[1fr_auto]">
+                  <input
+                    value={marker.label}
+                    onFocus={() => setActiveMarkerId(marker.id)}
+                    onChange={(event) => updateMarker(marker.id, { label: event.target.value })}
+                    className="min-h-10 rounded-md border border-line px-2 text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeMarker(marker.id)}
+                    className="inline-flex min-h-10 items-center justify-center rounded-md border border-red-200 px-3 text-sm font-semibold text-red-700"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {!markers.length ? <p className="text-sm text-muted">尚未建立標示點。</p> : null}
+            </div>
+          </div>
           <MeasurementPlanEditor
             title="工地及鑑定標的物位置圖"
             description="可上傳位置圖底圖後手繪標示工地、鑑定標的物、道路或相對位置。"
             paths={planPaths}
-            markers={[]}
+            markers={markers}
+            activeMarkerId={activeMarkerId}
             onPathsChange={(attachmentFourPlanPaths) => updateProject({ attachmentFourPlanPaths })}
-            onMarkerMove={() => undefined}
-            onActiveMarkerChange={() => undefined}
+            onMarkerMove={(markerId, position) => updateMarker(markerId, position)}
+            onActiveMarkerChange={setActiveMarkerId}
           />
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-muted">位置圖說明文字</span>
@@ -2760,6 +2940,7 @@ function ExportPanel({
           levelPlanPaths={activeCase.levelPlanPaths ?? []}
           tiltMeasurements={activeCase.tiltMeasurements ?? []}
           tiltPlanPaths={activeCase.tiltPlanPaths ?? []}
+          attachments={activeCase.attachments}
           completionWarning={{ pct, doneCount, total: checks.length }}
         />
       </Panel>

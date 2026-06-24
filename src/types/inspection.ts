@@ -25,6 +25,7 @@ export interface Project {
   processNote?: string;
   targetList?: TargetListItem[];
   attachmentFourPlanPaths?: string[];
+  attachmentFourMarkers?: MapMarker[];
   attachmentFourNote?: string;
   engineers?: ProjectEngineer[];
   engineerNames?: string;
@@ -32,6 +33,13 @@ export interface Project {
   finalDate?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface MapMarker {
+  id: string;
+  label: string;
+  x?: number;
+  y?: number;
 }
 
 export interface SurveyDate {
@@ -192,6 +200,8 @@ export interface AttachmentSlot {
   mode: "upload" | "editor";
   status: "empty" | "uploaded" | "editing" | "ready";
   fileName?: string;
+  fileUrl?: string;
+  storagePath?: string;
 }
 
 export interface InspectionCase {

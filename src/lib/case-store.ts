@@ -47,6 +47,7 @@ type ProjectRow = {
   process_note: string | null;
   target_list: TargetListItem[] | null;
   attachment_four_plan_paths: string[] | null;
+  attachment_four_markers: Array<{ id: string; label: string; x?: number; y?: number }> | null;
   attachment_four_note: string | null;
   engineer_names: string | null;
   association_engineers: string | null;
@@ -194,6 +195,7 @@ type AttachmentRow = {
   mode: AttachmentSlot["mode"];
   status: AttachmentSlot["status"];
   file_path: string | null;
+  storage_path?: string | null;
 };
 
 const sectionIdsByOrder = [
@@ -512,6 +514,7 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     process_note: project.processNote ?? "",
     target_list: project.targetList ?? [],
     attachment_four_plan_paths: project.attachmentFourPlanPaths ?? [],
+    attachment_four_markers: project.attachmentFourMarkers ?? [],
     attachment_four_note: project.attachmentFourNote ?? "",
     engineer_names: JSON.stringify(project.engineers ?? []),
     association_engineers: project.associationEngineers ?? "",
@@ -576,14 +579,11 @@ export async function saveInspectionCase(supabase: SupabaseClient, inspectionCas
     mode: slot.mode,
     status: slot.status,
     file_path: slot.fileName ?? null,
+    storage_path: slot.storagePath ?? null,
     updated_at: now,
   }));
 
-  const { error: attachmentsError } = await supabase
-    .from("ci_attachments")
-    .upsert(attachmentRows, { onConflict: "project_id,attachment_no" });
-
-  if (attachmentsError) throw attachmentsError;
+  await upsertAttachmentsWithColumnFallback(supabase, attachmentRows);
 
   await saveSitePhotos(supabase, inspectionCase);
   await saveLevelMeasurements(supabase, inspectionCase);
@@ -617,6 +617,7 @@ async function upsertProjectWithColumnFallback(supabase: SupabaseClient, project
     "process_note",
     "target_list",
     "attachment_four_plan_paths",
+    "attachment_four_markers",
     "attachment_four_note",
   ];
 
@@ -628,6 +629,18 @@ async function upsertProjectWithColumnFallback(supabase: SupabaseClient, project
     if (!missingColumn || !(missingColumn in retryPayload)) throw error;
     delete retryPayload[missingColumn];
   }
+}
+
+async function upsertAttachmentsWithColumnFallback(supabase: SupabaseClient, attachmentRows: Array<Record<string, unknown>>) {
+  if (!attachmentRows.length) return;
+
+  const { error } = await supabase.from("ci_attachments").upsert(attachmentRows, { onConflict: "project_id,attachment_no" });
+  if (!error) return;
+
+  if (!String(error.message).includes("storage_path")) throw error;
+  const fallbackRows = attachmentRows.map(({ storage_path: _storagePath, ...row }) => row);
+  const { error: fallbackError } = await supabase.from("ci_attachments").upsert(fallbackRows, { onConflict: "project_id,attachment_no" });
+  if (fallbackError) throw fallbackError;
 }
 
 export function loadLocalDraft(caseId: string): InspectionCase | null {
@@ -883,6 +896,7 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
     processNote: row.process_note ?? "",
     targetList: normalizeTargetList(row.target_list),
     attachmentFourPlanPaths: Array.isArray(row.attachment_four_plan_paths) ? row.attachment_four_plan_paths : [],
+    attachmentFourMarkers: Array.isArray(row.attachment_four_markers) ? row.attachment_four_markers : [],
     attachmentFourNote: row.attachment_four_note ?? "",
     engineers: parseEngineers(row.engineer_names),
     engineerNames: "",
@@ -918,7 +932,7 @@ async function projectRowToCase(supabase: SupabaseClient, row: ProjectRow, userI
 
   const attachmentSeven = await buildAttachmentSevenData(supabase, row, target);
   const reportSections = mergeReportSections(project, row.ci_report_sections ?? []);
-  const attachments = mergeAttachments(row.ci_attachments ?? []);
+  const attachments = await mergeAttachments(supabase, row.ci_attachments ?? []);
 
   return {
     id: row.id,
@@ -1113,10 +1127,15 @@ async function tiltMeasurementRowToMeasurement(supabase: SupabaseClient, row: Ti
 
 async function signedStorageUrl(supabase: SupabaseClient, storagePath: string | null, fallbackUrl: string) {
   if (!storagePath) return fallbackUrl;
+  const url = await createSignedStorageUrl(supabase, "ci-inspection-photos", storagePath);
+  return url ?? fallbackUrl;
+}
+
+async function createSignedStorageUrl(supabase: SupabaseClient, bucket: string, storagePath: string) {
   const { data, error } = await supabase.storage
-    .from("ci-inspection-photos")
+    .from(bucket)
     .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
-  if (error) return fallbackUrl;
+  if (error) return undefined;
   return data.signedUrl;
 }
 
@@ -1136,18 +1155,21 @@ function mergeReportSections(project: Project, rows: ReportSectionRow[]): Report
   });
 }
 
-function mergeAttachments(rows: AttachmentRow[]): AttachmentSlot[] {
-  return createDefaultAttachments().map((defaultSlot) => {
+async function mergeAttachments(supabase: SupabaseClient, rows: AttachmentRow[]): Promise<AttachmentSlot[]> {
+  return Promise.all(createDefaultAttachments().map(async (defaultSlot) => {
     const row = rows.find((item) => item.attachment_no === defaultSlot.no);
     if (!row) return defaultSlot;
+    const fileUrl = row.storage_path ? await createSignedStorageUrl(supabase, "ci-inspection-attachments", row.storage_path) : undefined;
     return {
       ...defaultSlot,
       title: row.title,
       mode: row.mode,
       status: row.status,
       fileName: row.file_path ?? undefined,
+      fileUrl,
+      storagePath: row.storage_path ?? undefined,
     };
-  });
+  }));
 }
 
 function normalizeSurveyDates(value: SurveyDate[] | null): SurveyDate[] {

@@ -1,4 +1,4 @@
-import type { Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
+import type { AttachmentSlot, Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildPhotoCaption } from "./caption";
 
 const usageOptions = ["商業", "住宅", "辦公室", "工業", "宗教", "其他"];
@@ -18,6 +18,7 @@ export function buildReportHtml(input: {
   tiltMeasurements?: TiltMeasurement[];
   tiltPlanPaths?: string[];
   reportSections?: ReportSection[];
+  attachments?: AttachmentSlot[];
 }) {
   const {
     project,
@@ -30,6 +31,7 @@ export function buildReportHtml(input: {
     tiltMeasurements = [],
     tiltPlanPaths = [],
     reportSections = [],
+    attachments = [],
   } = input;
   const floorsWithData = floors.filter((floor) => points.some((point) => point.floorId === floor.id));
   const photoPoints = points.filter((point) => point.photo?.imageUrl);
@@ -39,9 +41,10 @@ export function buildReportHtml(input: {
     ...buildMainReportPages(project, reportSections),
   ].join("");
   const attachmentBody = [
+    buildUploadedAttachmentPages(attachments),
     buildAttachmentFourPage(project, target),
-    buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
-    buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths),
+    getUploadedAttachment(attachments, 5) ? "" : buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
+    getUploadedAttachment(attachments, 6) ? "" : buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths),
     ...floorsWithData.map((floor, index) => buildFloorPlanPage(project, target, floor, index + 1)),
     points.length ? buildInspectionTablePage(project, target, floors, points, floorsWithData.length + 1) : "",
     ...chunk(photoPoints, 2).map((cards, index) => buildPhotoPage(target.address, cards, floorsWithData.length + 2 + index, index + 1)),
@@ -63,6 +66,35 @@ export function buildReportHtml(input: {
   </html>`;
 }
 
+function getUploadedAttachment(attachments: AttachmentSlot[], no: number) {
+  return attachments.find((attachment) => attachment.no === no && attachment.mode === "upload" && attachment.fileUrl);
+}
+
+function buildUploadedAttachmentPages(attachments: AttachmentSlot[]) {
+  const uploadedAttachments = attachments.filter(
+    (attachment) =>
+      attachment.fileUrl &&
+      (attachment.no <= 3 || (attachment.no === 5 && attachment.mode === "upload") || (attachment.no === 6 && attachment.mode === "upload")),
+  );
+  if (!uploadedAttachments.length) return "";
+
+  return uploadedAttachments
+    .map(
+      (attachment) => `
+        <section class="page uploaded-attachment-page">
+          <h2>社團法人臺中市土木技師公會</h2>
+          <h1>附件${escapeHtml(toChineseNumberForPdf(attachment.no))}：${escapeHtml(attachment.title)}</h1>
+          <div class="uploaded-attachment-box">
+            <p>本附件採外部 PDF 文件。</p>
+            <p>檔名：${escapeHtml(attachment.fileName ?? "")}</p>
+            <p><a href="${escapeHtml(attachment.fileUrl ?? "")}">開啟附件 PDF</a></p>
+          </div>
+          <div class="footer">附件${escapeHtml(toChineseNumberForPdf(attachment.no))}</div>
+        </section>`,
+    )
+    .join("");
+}
+
 function buildAttachmentFourPage(project: Project, target: Target) {
   const paths = project.attachmentFourPlanPaths ?? [];
   const note = project.attachmentFourNote?.trim() ?? "";
@@ -77,7 +109,7 @@ function buildAttachmentFourPage(project: Project, target: Target) {
         <div>工程名稱：${escapeHtml(project.workName || project.projectName)}</div>
         <div>標的物：${escapeHtml(target.address)}</div>
       </div>
-      <div class="attachment-four-map">${serializeSimplePlan(paths)}</div>
+      <div class="attachment-four-map">${serializeSimplePlan(paths, project.attachmentFourMarkers ?? [])}</div>
       <div class="attachment-four-note">${escapeHtml(note || "位置詳上圖。").replaceAll("\n", "<br>")}</div>
       <div class="footer">附件四-1</div>
     </section>`;
@@ -150,7 +182,7 @@ function buildMainReportPages(project: Project, sections: ReportSection[]) {
       <section class="page report-text-page main-report-page">
         ${buildAssociationHeader()}
         ${pageIndex === 0 ? buildMainTitleBlock(project) : ""}
-        ${pageSections.map((section) => buildMainSection(section)).join("")}
+        ${pageSections.map((section) => buildMainSection(section, project)).join("")}
         <div class="main-page-number">${pageIndex + 1}</div>
       </section>`,
   );
@@ -202,7 +234,44 @@ function buildMainTitleBlock(project: Project) {
     </div>`;
 }
 
-function buildMainSection(section: ReportSection) {
+function buildMainSection(section: ReportSection, project?: Project) {
+  if (section.id === "target-status" && project?.targetList?.length) {
+    const rows = project.targetList
+      .map(
+        (item, index) => `
+        <tr>
+          <td style="border:0.5pt solid #333;padding:2mm;text-align:center;width:12mm;">${index + 1}</td>
+          <td style="border:0.5pt solid #333;padding:2mm;">${escapeHtml(item.address)}</td>
+          <td style="border:0.5pt solid #333;padding:2mm;text-align:center;">${escapeHtml(item.usage)}</td>
+        </tr>`,
+      )
+      .join("");
+
+    return `
+      <section class="main-section">
+        <h2>${escapeHtml(section.title)}：</h2>
+        <div class="main-section-content">
+          <p>（一）用途及現況：</p>
+          <table style="width:100%;border-collapse:collapse;font-size:10pt;margin:3mm 0;">
+            <thead>
+              <tr>
+                <th style="border:0.5pt solid #333;padding:2mm;background:#f0f0f0;text-align:center;">序號</th>
+                <th style="border:0.5pt solid #333;padding:2mm;background:#f0f0f0;">鄰房地址</th>
+                <th style="border:0.5pt solid #333;padding:2mm;background:#f0f0f0;text-align:center;">用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          <p>（二）現況調查記錄：</p>
+          <p>工地及鄰房相關之水準測量成果詳附件五。</p>
+          <p>鄰房相關之傾斜測量之成果詳附件六。</p>
+          <p>各戶鑑定紀錄表、現況平面示意圖及照片詳附件七。</p>
+        </div>
+      </section>`;
+  }
+
   return `
     <section class="main-section">
       <h2>${escapeHtml(section.title)}：</h2>
@@ -314,7 +383,7 @@ function parseAssumedLevelElevation(note: string) {
 const simplePlanViewBox = { width: 900, height: 620 };
 const simplePlanBackgroundPrefix = "__background_image__:";
 
-function serializeSimplePlan(paths: string[]) {
+function serializeSimplePlan(paths: string[], markers: Array<{ label: string; x?: number; y?: number }> = []) {
   const backgroundImage = paths.find((path) => path.startsWith(simplePlanBackgroundPrefix))?.slice(simplePlanBackgroundPrefix.length) ?? "";
   const drawingPaths = paths.filter((path) => !path.startsWith(simplePlanBackgroundPrefix));
   const backgroundMarkup = backgroundImage
@@ -323,7 +392,17 @@ function serializeSimplePlan(paths: string[]) {
   const pathMarkup = drawingPaths
     .map((path) => `<path d="${escapeHtml(path)}" fill="none" stroke="#202020" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`)
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${simplePlanViewBox.width} ${simplePlanViewBox.height}">${backgroundMarkup}${pathMarkup}</svg>`;
+  const markerMarkup = markers
+    .filter((marker) => marker.x != null && marker.y != null)
+    .map(
+      (marker) => `
+        <g>
+          <circle cx="${marker.x}" cy="${marker.y}" r="12" fill="#c5161d" stroke="#fff" stroke-width="2"/>
+          <text x="${(marker.x ?? 0) + 16}" y="${(marker.y ?? 0) - 8}" fill="#c5161d" font-size="22" font-weight="700">${escapeHtml(marker.label)}</text>
+        </g>`,
+    )
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${simplePlanViewBox.width} ${simplePlanViewBox.height}">${backgroundMarkup}${pathMarkup}${markerMarkup}</svg>`;
 }
 
 function buildLevelPhotoPage(rows: LevelMeasurement[], attachmentPage: number) {
@@ -633,6 +712,11 @@ body { margin: 0; color: #111; font-family: "DFKai-SB", "BiauKai", "標楷體", 
 .toc-leader { flex: 1; height: 0; border-bottom: 1px dashed #111; transform: translateY(-0.8mm); }
 .toc-attachment-title { padding-left: 13mm !important; font-size: 14px; }
 .footer { position: absolute; left: 0; right: 0; bottom: 8mm; text-align: center; font-size: 12px; }
+.uploaded-attachment-page { padding: 26mm 24mm 18mm; }
+.uploaded-attachment-page h2 { margin: 10mm 0 2mm; text-align: center; font-size: 22px; font-weight: 400; }
+.uploaded-attachment-page h1 { margin: 0 0 14mm; text-align: center; font-size: 24px; font-weight: 700; }
+.uploaded-attachment-box { border: 1px solid #111; padding: 10mm; font-size: 18px; line-height: 2; }
+.uploaded-attachment-box a { color: #0645ad; text-decoration: underline; word-break: break-all; }
 .top-row { display: flex; justify-content: space-between; align-items: flex-start; font-size: 19px; }
 .top-row h1 { margin: 8mm 0 6mm 10mm; font-size: 20px; font-weight: 400; }
 .date-box { border: 1px solid #111; padding: 4mm; }
@@ -779,6 +863,11 @@ function chunk<T>(items: T[], size: number) {
     groups.push(items.slice(index, index + size));
   }
   return groups;
+}
+
+function toChineseNumberForPdf(value: number) {
+  const map = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  return map[value] ?? String(value);
 }
 
 function escapeHtml(value: string) {
