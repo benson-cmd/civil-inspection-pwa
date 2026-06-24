@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { FileText } from "lucide-react";
 import type { AttachmentSlot, Floor, InspectionPoint, LevelMeasurement, Project, ReportSection, SitePhoto, Target, TiltMeasurement } from "@/types/inspection";
 import { buildReportHtml } from "@/lib/pdf";
@@ -37,6 +38,7 @@ export function PdfExportButton({
   attachments = [],
   completionWarning,
 }: PdfExportButtonProps) {
+  const [isExporting, setIsExporting] = useState(false);
   const checklist = buildExportChecklist({
     project,
     target,
@@ -50,8 +52,9 @@ export function PdfExportButton({
   return (
     <button
       type="button"
-      className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white shadow-sm"
-      onClick={() => {
+      disabled={isExporting}
+      className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+      onClick={async () => {
         let shouldContinue = true;
 
         if (completionWarning && completionWarning.doneCount < completionWarning.total) {
@@ -66,6 +69,57 @@ export function PdfExportButton({
         }
 
         if (!shouldContinue) return;
+
+        const mergeAttachments = getMergeAttachments(attachments);
+        const htmlForMergedPdf = buildReportHtml({
+          project,
+          target,
+          floors,
+          points,
+          sitePhotos,
+          levelMeasurements,
+          levelPlanPaths,
+          tiltMeasurements,
+          tiltPlanPaths,
+          reportSections,
+          attachments,
+          includeUploadedAttachmentPages: false,
+        });
+
+        setIsExporting(true);
+        try {
+          const response = await fetch("/api/export/pdf", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              html: htmlForMergedPdf,
+              fileName: project.caseNo || "inspection-report",
+              baseUrl: window.location.origin,
+              attachments: mergeAttachments,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.json().catch(() => null) as { error?: string } | null;
+            throw new Error(errorBody?.error || "伺服器 PDF 合併失敗。");
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${project.caseNo || "inspection-report"}.pdf`;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          return;
+        } catch (error) {
+          console.error("Failed to export merged PDF, falling back to HTML preview", error);
+          window.alert(
+            `${error instanceof Error ? error.message : "PDF 合併失敗。"}\n\n系統將改開 HTML 預覽，請用瀏覽器列印另存 PDF。`,
+          );
+        } finally {
+          setIsExporting(false);
+        }
 
         const html = buildReportHtml({
           project,
@@ -98,9 +152,24 @@ export function PdfExportButton({
         printWindow.document.close();
       }}
     >
-      <FileText size={18} /> PDF預覽 / 匯出
+      <FileText size={18} /> {isExporting ? "PDF合併中..." : "PDF預覽 / 匯出"}
     </button>
   );
+}
+
+function getMergeAttachments(attachments: AttachmentSlot[]) {
+  return attachments
+    .filter(
+      (attachment) =>
+        attachment.fileUrl &&
+        (attachment.no <= 3 || (attachment.no === 5 && attachment.mode === "upload") || (attachment.no === 6 && attachment.mode === "upload")),
+    )
+    .sort((a, b) => a.no - b.no)
+    .map((attachment) => ({
+      no: attachment.no,
+      title: attachment.title,
+      url: attachment.fileUrl ?? "",
+    }));
 }
 
 function buildExportChecklist({

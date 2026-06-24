@@ -19,6 +19,7 @@ export function buildReportHtml(input: {
   tiltPlanPaths?: string[];
   reportSections?: ReportSection[];
   attachments?: AttachmentSlot[];
+  includeUploadedAttachmentPages?: boolean;
 }) {
   const {
     project,
@@ -32,6 +33,7 @@ export function buildReportHtml(input: {
     tiltPlanPaths = [],
     reportSections = [],
     attachments = [],
+    includeUploadedAttachmentPages = true,
   } = input;
   const floorsWithData = floors.filter((floor) => points.some((point) => point.floorId === floor.id));
   const photoPoints = points.filter((point) => point.photo?.imageUrl);
@@ -41,7 +43,7 @@ export function buildReportHtml(input: {
     ...buildMainReportPages(project, reportSections),
   ].join("");
   const attachmentBody = [
-    buildUploadedAttachmentPages(attachments),
+    includeUploadedAttachmentPages ? buildUploadedAttachmentPages(attachments) : "",
     buildAttachmentFourPage(project, target),
     getUploadedAttachment(attachments, 5) ? "" : buildLevelMeasurementPages(project, levelMeasurements, levelPlanPaths),
     getUploadedAttachment(attachments, 6) ? "" : buildTiltMeasurementPages(project, tiltMeasurements, tiltPlanPaths),

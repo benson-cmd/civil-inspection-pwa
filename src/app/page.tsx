@@ -2928,7 +2928,9 @@ function ExportPanel({
         </div>
       </Panel>
       <Panel title="目前可匯出" icon={<FileText size={18} />}>
-        <p className="mb-3 text-sm text-muted">目前會合併封面、目錄、主文、附件五、附件六、附件七與附件八，並以瀏覽器列印方式另存 PDF。</p>
+        <p className="mb-3 text-sm text-muted">
+          目前會產生封面、目錄、主文與系統附件，並將附件一～三上傳 PDF 併入同一份 PDF。附件四由系統位置圖產生；附件五、附件六可依模式採用系統現場資料或試驗室 PDF；附件七、附件八由系統照片資料產生。
+        </p>
         <PdfExportButton
           project={activeCase.project}
           target={activeCase.target}
