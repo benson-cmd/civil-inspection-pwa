@@ -376,7 +376,7 @@ export async function fetchCaseMembers(supabase: SupabaseClient, projectId: stri
     return {
       id: member.user_id,
       email: profile?.email ?? "",
-      name: profile?.name || profile?.email || member.user_id,
+      name: profile?.name || profile?.email || "使用者資料未授權讀取",
       role: profile?.role ?? "user",
       projectRole: member.role,
     };
