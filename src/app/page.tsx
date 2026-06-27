@@ -238,7 +238,17 @@ export default function HomePage() {
       setSaveError("");
     } catch (error) {
       console.error("Failed to load inspection cases from Supabase", error);
-      const message = error instanceof Error ? error.message : "登入失敗，請確認此 Google 帳戶是否已被管理者授權。";
+      const attemptedEmail = user.email?.trim().toLowerCase() || "無法取得 email";
+      const rawMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : JSON.stringify(error);
+      const message = [
+        `登入失敗，這次 Google 回傳的帳號是：${attemptedEmail}`,
+        rawMessage && rawMessage !== "{}" ? `錯誤原因：${rawMessage}` : "錯誤原因：請確認此 Google 帳戶是否已被管理者授權，或 Supabase profile insert policy 是否已執行。",
+      ].join("\n");
       setAuthError(message);
       await supabase.auth.signOut();
       setCurrentUser(null);
@@ -490,7 +500,7 @@ export default function HomePage() {
                   使用 Google 帳戶登入
                 </button>
                 {authError ? (
-                  <p className="mt-3 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">
+                  <p className="mt-3 whitespace-pre-line rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-semibold text-orange-700">
                     {authError}
                   </p>
                 ) : null}
