@@ -232,10 +232,17 @@ export default function HomePage() {
       const firstCase = createCase(signedInUser.id);
       setCases([firstCase]);
       setActiveCaseId(firstCase.id);
-      await saveInspectionCase(supabase, firstCase);
-      setSaveStatus("saved");
-      setLastSavedAt(new Date().toISOString());
-      setSaveError("");
+      try {
+        await saveInspectionCase(supabase, firstCase);
+        setSaveStatus("saved");
+        setLastSavedAt(new Date().toISOString());
+        setSaveError("");
+      } catch (saveError) {
+        console.error("Failed to create first inspection case", saveError);
+        saveLocalDraft(firstCase);
+        setSaveStatus("error");
+        setSaveError(saveError instanceof Error ? saveError.message : "初始案件建立失敗，已暫存至本機。");
+      }
     } catch (error) {
       console.error("Failed to load inspection cases from Supabase", error);
       const attemptedEmail = user.email?.trim().toLowerCase() || "無法取得 email";
