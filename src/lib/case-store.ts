@@ -213,10 +213,11 @@ const sectionIdsByOrder = [
 ];
 
 export function appUserFromSupabaseUser(user: User): AppUser {
+  const email = (user.email ?? "").trim().toLowerCase();
   return {
     id: user.id,
-    name: user.user_metadata?.name ?? user.email ?? "Google 使用者",
-    email: user.email ?? "",
+    name: user.user_metadata?.name ?? email ?? "Google 使用者",
+    email,
     role: "user",
   };
 }
@@ -226,7 +227,7 @@ export async function resolveSignedInAppUser(supabase: SupabaseClient, user: Use
   const allowedUser = await fetchAllowedUserByEmail(supabase, baseUser.email);
 
   if (!allowedUser.allowed) {
-    throw new Error("此 Google 帳戶尚未被管理者加入使用者名單。");
+    throw new Error(`此 Google 帳戶尚未被管理者加入使用者名單：${baseUser.email || "無法取得 email"}`);
   }
 
   const nextUser = {
